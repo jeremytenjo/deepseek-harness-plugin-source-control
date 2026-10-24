@@ -736,6 +736,19 @@ window.__ModuleLoader__.load({
             h(
               'div',
               { className: 'dshcm-actions' },
+              h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'dshcm-button dshcm-commit',
+                  disabled: !canCommit,
+                  onClick: commit,
+                  'aria-label': translate('commitAria'),
+                  title: translate('commitAria'),
+                },
+                h(CheckIcon),
+                busy === 'commit' ? translate('committing') : translate('commit'),
+              ),
               showPush
                 ? h(
                     'button',
@@ -755,19 +768,6 @@ window.__ModuleLoader__.load({
                         }),
                   )
                 : null,
-              h(
-                'button',
-                {
-                  type: 'button',
-                  className: 'dshcm-button dshcm-commit',
-                  disabled: !canCommit,
-                  onClick: commit,
-                  'aria-label': translate('commitAria'),
-                  title: translate('commitAria'),
-                },
-                h(CheckIcon),
-                busy === 'commit' ? translate('committing') : translate('commit'),
-              ),
             ),
             h(
               'div',
