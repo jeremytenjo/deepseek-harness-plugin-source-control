@@ -1,0 +1,41 @@
+{
+  "name": "@local/dsh-commit-message",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Generate a commit message from the current Git changes, commit them, and push unpushed commits from the composer.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jeremytenjo/deepseek-harness-plugin-source-control.git"
+  },
+  "homepage": "https://github.com/jeremytenjo/deepseek-harness-plugin-source-control#readme",
+  "bugs": {
+    "url": "https://github.com/jeremytenjo/deepseek-harness-plugin-source-control/issues"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  }
+}

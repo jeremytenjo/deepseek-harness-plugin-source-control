@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Commit Message",
+    "description": "Generates a commit message from the current Git changes and commits them from the composer."
+  }
+}
