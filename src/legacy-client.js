@@ -10,6 +10,37 @@ const h = React.createElement;
     const TAB_ID = '@local/dsh-commit-message';
     const DIFF_KIND = 'source-control-diff';
     const DIFF_TAB_ID = '@local/dsh-commit-message/diff';
+    const MEDIA_ROUTE = '/__dsh/commit-message-media';
+
+    const MEDIA_EXTENSIONS = new Map([
+      ['png', 'image'],
+      ['jpg', 'image'],
+      ['jpeg', 'image'],
+      ['gif', 'image'],
+      ['webp', 'image'],
+      ['avif', 'image'],
+      ['bmp', 'image'],
+      ['ico', 'image'],
+      ['mp4', 'video'],
+      ['webm', 'video'],
+      ['ogv', 'video'],
+      ['mov', 'video'],
+      ['m4v', 'video'],
+      ['mp3', 'audio'],
+      ['wav', 'audio'],
+      ['ogg', 'audio'],
+      ['oga', 'audio'],
+      ['m4a', 'audio'],
+      ['aac', 'audio'],
+      ['flac', 'audio'],
+    ]);
+
+    function detectMediaKind(path) {
+      const name = String(path || '').split('/').pop() || '';
+      const dot = name.lastIndexOf('.');
+      if (dot === -1) return '';
+      return MEDIA_EXTENSIONS.get(name.slice(dot + 1).toLowerCase()) || '';
+    }
 
     const EN = {
       title: 'Source control',
@@ -24,6 +55,16 @@ const h = React.createElement;
       diffRetry: 'Retry',
       diffEmpty: 'No textual changes to show.',
       diffBinary: 'This is a binary file; the changes are not shown.',
+      mediaPreview: 'Media preview',
+      openInVSCode: 'Open in VS Code',
+      imagePreview: 'Image preview',
+      expandImage: 'Expand image',
+      closeImage: 'Close image',
+      zoomIn: 'Zoom in',
+      zoomOut: 'Zoom out',
+      resetZoom: 'Reset zoom',
+      zoomHint: 'Scroll to zoom · Drag to pan',
+      openInVSCodeFailed: 'Could not open the file in VS Code.',
       diffTruncated: 'The diff is truncated.',
       diffOpenFile: 'Open file',
       diffOpenFileAria: 'Open {path} in the file viewer',
@@ -102,6 +143,16 @@ const h = React.createElement;
       diffRetry: '重试',
       diffEmpty: '没有可显示的文本更改。',
       diffBinary: '这是二进制文件，不显示更改。',
+      mediaPreview: '媒体预览',
+      openInVSCode: '在 VS Code 中打开',
+      imagePreview: '图片预览',
+      expandImage: '放大图片',
+      closeImage: '关闭图片',
+      zoomIn: '放大',
+      zoomOut: '缩小',
+      resetZoom: '重置缩放',
+      zoomHint: '滚轮缩放 · 拖拽平移',
+      openInVSCodeFailed: '无法在 VS Code 中打开该文件。',
       diffTruncated: '差异已截断。',
       diffOpenFile: '打开文件',
       diffOpenFileAria: '在文件查看器中打开 {path}',
@@ -343,6 +394,31 @@ const h = React.createElement;
       return data;
     }
 
+    async function requestOpenInVSCode(sessionId, path, line, translate) {
+      let response;
+      try {
+        response = await fetch(ROUTE, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ action: 'open-in-vscode', sessionId, path, line }),
+        });
+      } catch {
+        throw new Error(translate('networkFailed'));
+      }
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error(translate('unreadable'));
+      }
+      if (!response.ok || !data || data.ok !== true) {
+        throw new Error(
+          (data && typeof data.error === 'string' && data.error) || translate('requestFailed'),
+        );
+      }
+      return data;
+    }
+
     function statusText(translate, status) {
       if (!status) return translate('checking');
       if (!status.isRepo) return translate('notRepo');
@@ -473,6 +549,33 @@ const h = React.createElement;
           controller.abort();
         };
       }, [sessionId]);
+
+      React.useEffect(() => {
+        if (!feedback || feedback.kind !== 'error' || !/no longer live/i.test(feedback.text)) {
+          return undefined;
+        }
+        let cancelled = false;
+        let attempts = 0;
+        let timer = 0;
+        const retry = () => {
+          if (cancelled) return;
+          attempts += 1;
+          request('status', {})
+            .then((data) => {
+              if (cancelled) return;
+              setStatus(readStatus(data));
+              setFeedback(null);
+            })
+            .catch(() => {
+              if (!cancelled && attempts < 15) timer = setTimeout(retry, 1200);
+            });
+        };
+        timer = setTimeout(retry, 800);
+        return () => {
+          cancelled = true;
+          clearTimeout(timer);
+        };
+      }, [feedback, request]);
 
       React.useEffect(() => {
         return () => {
@@ -801,17 +904,37 @@ const h = React.createElement;
       const resourceSessionId = props.sessionId || params.sessionId;
       const sessionId = normaliseSessionId(resourceSessionId);
       const revision = tab.navigation.revision;
+      const localMediaKind =
+        !String(params.letter || '').includes('D') &&
+        !String(params.status || '').includes('D')
+          ? detectMediaKind(path)
+          : '';
       const [state, setState] = React.useState({
         phase: 'loading',
         diff: '',
         truncated: false,
         binary: false,
+        mediaKind: '',
+        mediaVersion: '',
         status: '',
         error: '',
       });
       const [refreshKey, setRefreshKey] = React.useState(0);
 
       React.useEffect(() => {
+        if (localMediaKind) {
+          setState({
+            phase: 'ready',
+            diff: '',
+            truncated: false,
+            binary: true,
+            mediaKind: localMediaKind,
+            mediaVersion: Date.now().toString(36),
+            status: typeof params.status === 'string' ? params.status : '',
+            error: '',
+          });
+          return undefined;
+        }
         let alive = true;
         const controller = new AbortController();
         setState((previous) => ({ ...previous, phase: 'loading', error: '' }));
@@ -823,6 +946,8 @@ const h = React.createElement;
               diff: typeof data.diff === 'string' ? data.diff : '',
               truncated: Boolean(data.truncated),
               binary: Boolean(data.binary),
+              mediaKind: typeof data.mediaKind === 'string' ? data.mediaKind : '',
+              mediaVersion: typeof data.mediaVersion === 'string' ? data.mediaVersion : '',
               status: typeof data.status === 'string' ? data.status : '',
               error: '',
             });
@@ -834,6 +959,8 @@ const h = React.createElement;
               diff: '',
               truncated: false,
               binary: false,
+              mediaKind: '',
+              mediaVersion: '',
               status: '',
               error: error instanceof Error ? error.message : String(error),
             });
@@ -842,7 +969,7 @@ const h = React.createElement;
           alive = false;
           controller.abort();
         };
-      }, [sessionId, path, revision, refreshKey, translate]);
+      }, [sessionId, path, revision, refreshKey, translate, localMediaKind]);
 
       const label = React.useCallback(
         (key, values) => (values ? format(translate, key, values) : translate(key)),
@@ -858,6 +985,10 @@ const h = React.createElement;
         setRefreshKey((value) => value + 1);
       }
 
+      async function openInVSCode(line) {
+        await requestOpenInVSCode(sessionId, path, line, translate);
+      }
+
       function openFileInViewer() {
         if (!canOpenFile) return;
         try {
@@ -868,6 +999,10 @@ const h = React.createElement;
           console.error('commit-message: could not open file', error);
         }
       }
+
+      const mediaUrl = state.mediaKind
+        ? `${MEDIA_ROUTE}?sessionId=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}&v=${encodeURIComponent(state.mediaVersion || String(refreshKey))}`
+        : '';
 
       return h(
         React.Suspense,
@@ -882,10 +1017,12 @@ const h = React.createElement;
           path,
           params,
           state,
+          mediaUrl,
           canOpenFile,
           label,
           onRefresh: refresh,
           onOpenFile: openFileInViewer,
+          onOpenInVSCode: openInVSCode,
         }),
       );
     }

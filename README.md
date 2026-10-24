@@ -15,10 +15,20 @@ Review changes, generate commit messages, commit, push, and manage GitHub reposi
 - Generate a Conventional Commits message from the current diff using the session's model.
 - Commit all changes with `git add -A` and `git commit`; hooks are respected.
 - Per-file diff view with Shiki syntax highlighting from `@pierre/diffs`, line numbers, hunk separators, and worktree-vs-`HEAD` context.
+- Preview changed images, video, and audio directly in the diff panel.
+- Right-click a line in the diff to open the file in VS Code at that line.
 - Push unpushed commits to the configured upstream.
 - Open the connected GitHub repository, or create a private/public repository with `gh`.
 - Restart the app and Host from a dead-session error.
 - English and Chinese UI.
+
+## Media previews
+
+Images, video, and audio render in place of a text diff. Media is streamed from a loopback-only route with range support for seeking.
+
+<p align="center">
+  <img src="docs/media-preview.png" width="860" alt="Image preview inside the diff panel" />
+</p>
 
 ## Requirements
 
@@ -26,6 +36,7 @@ Review changes, generate commit messages, commit, push, and manage GitHub reposi
 - Git, with an upstream branch for pushing.
 - A configured model for message generation.
 - For repository creation: GitHub CLI (`gh`) installed and authenticated with `gh auth login`.
+- For **Open in VS Code**: VS Code installed with the `code` command on `PATH`.
 
 ## Install
 
@@ -61,7 +72,8 @@ pnpm build
 
 ## Security and limits
 
-- Git and `gh` commands use argv arrays, never a shell. The restart action uses Electron `app.relaunch()`.
+- Git, `gh`, and `code` commands use argv arrays, never a shell. The restart action uses Electron `app.relaunch()`.
 - The diff view compares the working tree with `HEAD`; it does not browse history or arbitrary revisions.
 - Diff highlighting runs on the main thread, and the lazy diff chunk is about 10 MB.
+- Media previews show the current working-tree file; deleted media falls back to the binary note.
 - GitHub support targets `github.com` only.

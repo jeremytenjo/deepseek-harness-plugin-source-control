@@ -7,14 +7,58 @@
  */
 
 import { spawn } from 'node:child_process';
+import { createReadStream, statSync } from 'node:fs';
 
 const ROUTE = '/__dsh/commit-message';
+const MEDIA_ROUTE = '/__dsh/commit-message-media';
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_DIFF_CHARS = 20_000;
 const MAX_FILE_DIFF_CHARS = 60_000;
 const MAX_UNTRACKED_FILE_BYTES = 200_000;
 const MAX_COMMIT_MESSAGE_CHARS = 20_000;
 const MAX_GIT_OUTPUT_BYTES = 8 * 1024 * 1024;
+
+const MEDIA_TYPES = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  avif: 'image/avif',
+  bmp: 'image/bmp',
+  ico: 'image/x-icon',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  ogv: 'video/ogg',
+  mov: 'video/quicktime',
+  m4v: 'video/x-m4v',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  ogg: 'audio/ogg',
+  oga: 'audio/ogg',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  flac: 'audio/flac',
+};
+
+function mediaExtension(path) {
+  const name = String(path || '').split('/').pop() || '';
+  const cut = name.lastIndexOf('.');
+  if (cut === -1) return '';
+  return name.slice(cut + 1).toLowerCase();
+}
+
+function mediaMimeForPath(path) {
+  return MEDIA_TYPES[mediaExtension(path)] || '';
+}
+
+function mediaKindForPath(path) {
+  const mime = mediaMimeForPath(path);
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('video/')) return 'video';
+  if (mime.startsWith('audio/')) return 'audio';
+  return '';
+}
 
 export const inject = ['webServer', 'subprocess', 'sessions', 'workingDirectory', 'fs'];
 
@@ -34,12 +78,20 @@ async function restartHarness() {
     electron = undefined;
   }
   const app = electron?.app ?? electron?.default?.app;
-  if (app && typeof app.relaunch === 'function' && typeof app.exit === 'function') {
+  if (app && typeof app.relaunch === 'function' && typeof app.quit === 'function') {
     // Let the HTTP response flush before the app tears the server down.
     setTimeout(() => {
       try {
         app.relaunch();
-        app.exit(0);
+        app.quit();
+        // If a before-quit hook blocks the quit, force the process down.
+        setTimeout(() => {
+          try {
+            app.exit(0);
+          } catch {
+            // The app already exited.
+          }
+        }, 4000).unref?.();
       } catch (error) {
         console.error('commit-message: could not restart the harness', error);
       }
@@ -48,8 +100,15 @@ async function restartHarness() {
   }
 
   if (process.versions.electron && process.platform === 'darwin') {
-    const script =
-      'sleep 1; /usr/bin/osascript -e \'tell application "DeepSeek Harness" to quit\'; sleep 2; /usr/bin/open -a "DeepSeek Harness"';
+    const script = [
+      'sleep 1',
+      '/usr/bin/osascript -e \'tell application "DeepSeek Harness" to quit\'',
+      'for i in $(/usr/bin/seq 1 40); do',
+      '  if ! /usr/bin/pgrep -x "DeepSeek Harness" >/dev/null 2>&1; then break; fi',
+      '  sleep 0.5',
+      'done',
+      '/usr/bin/open -a "DeepSeek Harness"',
+    ].join('; ');
     const child = spawn('/bin/sh', ['-c', script], { detached: true, stdio: 'ignore' });
     child.unref();
     return { method: 'apple-script' };
@@ -71,6 +130,15 @@ export function apply(ctx) {
       }),
     'commit-message: route',
   );
+  ctx.effect(
+    () =>
+      ctx.webServer.register({
+        kind: 'exact',
+        path: MEDIA_ROUTE,
+        handler: (req, res) => handleMediaRequest(ctx, req, res),
+      }),
+    'commit-message: media route',
+  );
 }
 
 async function handleRequest(ctx, req, res) {
@@ -89,6 +157,7 @@ async function handleRequest(ctx, req, res) {
     if (
       action !== 'status' &&
       action !== 'diff' &&
+      action !== 'open-in-vscode' &&
       action !== 'generate' &&
       action !== 'commit' &&
       action !== 'push' &&
@@ -118,13 +187,43 @@ async function handleRequest(ctx, req, res) {
         throw new RequestError(409, 'This session working directory is not a Git repository.');
       }
       const file = findChangedFile(status, body.path);
+      const mediaKind = file.status.includes('D') ? '' : mediaKindForPath(file.path);
+      if (mediaKind) {
+        // Media is streamed from the media route; never try to decode it as text.
+        send(res, 200, {
+          ok: true,
+          path: file.path,
+          status: file.status,
+          diff: '',
+          truncated: false,
+          binary: true,
+          mediaKind,
+          mediaVersion: Date.now().toString(36),
+        });
+        return;
+      }
       const diff = await loadFileDiff(ctx, status, file, deadline.signal);
       send(res, 200, {
         ok: true,
         path: file.path,
         status: file.status,
         ...diff,
+        mediaKind: '',
+        mediaVersion: '',
       });
+      return;
+    }
+
+    if (action === 'open-in-vscode') {
+      const line = Number(body.line);
+      const result = await openInVSCode(
+        ctx,
+        cwd,
+        body.path,
+        Number.isFinite(line) ? line : 1,
+        deadline.signal,
+      );
+      send(res, 200, { ok: true, ...result });
       return;
     }
 
@@ -202,6 +301,141 @@ async function handleRequest(ctx, req, res) {
   } finally {
     deadline.clear();
   }
+}
+
+async function handleMediaRequest(ctx, req, res) {
+  const deadline = makeDeadline(30_000);
+  try {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      sendMediaError(res, 405, 'Only GET and HEAD are supported.');
+      return;
+    }
+    assertSameOrigin(ctx, req);
+
+    const url = new URL(req.url || '/', 'http://127.0.0.1');
+    const sessionId = url.searchParams.get('sessionId') || '';
+    const filePath = url.searchParams.get('path') || '';
+    if (!sessionId || !filePath) {
+      throw new RequestError(400, 'A session and file path are required.');
+    }
+    if (filePath.length > 4096 || filePath.includes('\0')) {
+      throw new RequestError(400, 'Invalid file path.');
+    }
+
+    const { cwd } = await resolveSessionDirectory(ctx, sessionId, deadline.signal);
+    const status = await inspectRepo(ctx, cwd, deadline.signal);
+    if (!status.isRepo) {
+      throw new RequestError(409, 'This session working directory is not a Git repository.');
+    }
+    const file = status.files.find((candidate) => candidate.path === filePath);
+    if (!file || file.status.includes('D')) {
+      throw new RequestError(404, 'That file is not available in the working tree.');
+    }
+    const mime = mediaMimeForPath(file.path);
+    if (!mime) {
+      throw new RequestError(415, 'That file is not a supported image, video, or audio type.');
+    }
+
+    const root = status.top || cwd;
+    const rootTarget = await ctx.fs.resolve('.', { cwd: root, signal: deadline.signal });
+    const target = await ctx.fs.resolve(file.path, { cwd: root, signal: deadline.signal });
+    if (!ctx.fs.contains(rootTarget, target)) {
+      throw new RequestError(403, 'The file is outside the repository.');
+    }
+    const hostPath = ctx.fs.processPath(target);
+    const info = statSync(hostPath);
+    if (!info.isFile()) {
+      throw new RequestError(404, 'The file is no longer available.');
+    }
+
+    const headers = {
+      'content-type': mime,
+      'accept-ranges': 'bytes',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+      'content-disposition': 'inline',
+    };
+    const size = info.size;
+    const range = req.headers.range;
+    if (range) {
+      const parsed = parseByteRange(range, size);
+      if (!parsed) {
+        res.writeHead(416, { ...headers, 'content-range': `bytes */${size}` });
+        res.end();
+        return;
+      }
+      const { start, end } = parsed;
+      res.writeHead(206, {
+        ...headers,
+        'content-range': `bytes ${start}-${end}/${size}`,
+        'content-length': String(end - start + 1),
+      });
+      if (req.method === 'HEAD') {
+        res.end();
+        return;
+      }
+      const stream = createReadStream(hostPath, { start, end });
+      stream.on('error', () => {
+        if (!res.headersSent) sendMediaError(res, 500, 'Could not read the file.');
+        else res.destroy();
+      });
+      res.on('close', () => stream.destroy());
+      stream.pipe(res);
+      return;
+    }
+
+    res.writeHead(200, { ...headers, 'content-length': String(size) });
+    if (req.method === 'HEAD') {
+      res.end();
+      return;
+    }
+    const stream = createReadStream(hostPath);
+    stream.on('error', () => {
+      if (!res.headersSent) sendMediaError(res, 500, 'Could not read the file.');
+      else res.destroy();
+    });
+    res.on('close', () => stream.destroy());
+    stream.pipe(res);
+  } catch (error) {
+    const status = error instanceof RequestError ? error.status : 500;
+    const message = error instanceof Error ? error.message : 'Could not read the media file.';
+    sendMediaError(res, status, message);
+  } finally {
+    deadline.clear();
+  }
+}
+
+function parseByteRange(header, size) {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(String(header || '').trim());
+  if (!match) return null;
+  const [, rawStart, rawEnd] = match;
+  if (!rawStart && !rawEnd) return null;
+  let start;
+  let end;
+  if (!rawStart) {
+    const suffix = Number(rawEnd);
+    if (!Number.isFinite(suffix) || suffix <= 0) return null;
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = Number(rawStart);
+    end = rawEnd ? Number(rawEnd) : size - 1;
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  }
+  if (start < 0 || start >= size || end < start) return null;
+  if (end >= size) end = size - 1;
+  return { start, end };
+}
+
+function sendMediaError(res, status, message) {
+  if (res.writableEnded) return;
+  const body = `${message}\n`;
+  res.writeHead(status, {
+    'content-type': 'text/plain; charset=utf-8',
+    'cache-control': 'no-store',
+    'content-length': Buffer.byteLength(body),
+  });
+  res.end(body);
 }
 
 function assertSameOrigin(ctx, req) {
@@ -443,6 +677,75 @@ function assertCommittable(status) {
   if (status.changedFiles === 0) {
     throw new RequestError(409, 'There are no uncommitted changes.');
   }
+}
+
+async function openInVSCode(ctx, cwd, inputPath, line, signal) {
+  const status = await inspectRepo(ctx, cwd, signal);
+  if (!status.isRepo) {
+    throw new RequestError(409, 'This session working directory is not a Git repository.');
+  }
+  const file = findChangedFile(status, inputPath);
+  if (file.status.includes('D')) {
+    throw new RequestError(409, 'That file was deleted; there is no working-tree file to open.');
+  }
+  const root = status.top || cwd;
+  const rootTarget = await ctx.fs.resolve('.', { cwd: root, signal });
+  const target = await ctx.fs.resolve(file.path, { cwd: root, signal });
+  if (!ctx.fs.contains(rootTarget, target)) {
+    throw new RequestError(403, 'The file is outside the repository.');
+  }
+  const info = await ctx.fs.stat(target, signal);
+  if (!info || info.type !== 'file') {
+    throw new RequestError(404, 'The file is no longer available.');
+  }
+  const executable = await resolveVSCodeExecutable(ctx, signal);
+  const targetLine =
+    Number.isFinite(line) && line > 0 ? Math.min(Math.floor(line), 10_000_000) : 1;
+  const result = await runCommand(
+    ctx,
+    executable,
+    ['--goto', `${ctx.fs.processPath(target)}:${targetLine}`],
+    root,
+    signal,
+  );
+  if (result.code !== 0) {
+    const detail = `${result.stderr || ''}\n${result.stdout || ''}`.trim();
+    throw new RequestError(
+      409,
+      detail
+        ? `VS Code could not open the file: ${detail.slice(0, 1000)}`
+        : 'VS Code could not open the file.',
+    );
+  }
+  return { path: file.path, line: targetLine };
+}
+
+async function resolveVSCodeExecutable(ctx, signal) {
+  const candidates = ['code'];
+  if (process.platform === 'darwin') {
+    candidates.push(
+      '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code',
+      '/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code',
+      '/usr/local/bin/code',
+      '/opt/homebrew/bin/code',
+    );
+  } else if (process.platform === 'win32') {
+    candidates.push('code.cmd');
+  } else {
+    candidates.push('/usr/bin/code', '/usr/local/bin/code', '/snap/bin/code');
+  }
+  for (const candidate of candidates) {
+    try {
+      const resolved = await ctx.subprocess.resolveExecutable(candidate, undefined, signal);
+      if (resolved) return resolved;
+    } catch {
+      // Try the next known location.
+    }
+  }
+  throw new RequestError(
+    503,
+    'VS Code CLI (`code`) was not found. Install VS Code and enable the `code` command, then try again.',
+  );
 }
 
 function findChangedFile(status, input) {
