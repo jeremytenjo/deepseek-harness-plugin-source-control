@@ -44,6 +44,17 @@ export interface SourceControlStatus {
   untrackedFiles: number;
 }
 
+export type BranchBusy = '' | 'switch' | 'create';
+
+export interface BranchState {
+  loading: boolean;
+  busy: BranchBusy;
+  current: string;
+  branches: string[];
+  name: string;
+  error: string;
+}
+
 export type GitHubVisibility = 'private' | 'public';
 
 export interface GitHubState {
@@ -67,6 +78,7 @@ export interface SourceControlPanelProps {
   feedback: Feedback | null;
   changesOpen: boolean;
   github: GitHubState | null;
+  branch: BranchState | null;
   restarting: boolean;
   canRestart: boolean;
   canGenerate: boolean;
@@ -87,6 +99,11 @@ export interface SourceControlPanelProps {
   onToggleChanges(): void;
   onOpenDiff(file: ChangedFile): void;
   onOpenGitHub(): void;
+  onOpenBranches(): void;
+  onCloseBranches(): void;
+  onSwitchBranch(name: string): void;
+  onNewBranchName(value: string): void;
+  onCreateBranch(): void;
   onRestart(): void;
   onCloseGitHub(): void;
   onChooseVisibility(visibility: GitHubVisibility): void;

@@ -15,6 +15,7 @@ Review changes, generate commit messages, commit, push, and manage GitHub reposi
 - Generate a Conventional Commits message from the current diff using the session's model.
 - Commit all changes with `git add -A` and `git commit`; hooks are respected.
 - See the current branch, upstream, and ahead/behind state at a glance.
+- Switch local branches or create a new one from the header; a new branch is checked out automatically.
 - Per-file diff view with Shiki syntax highlighting from `@pierre/diffs`, line numbers, hunk separators, and worktree-vs-`HEAD` context.
 - Preview changed images, video, and audio directly in the diff panel.
 - Click an image to open a full-screen viewer with wheel/pinch zoom, drag-to-pan, and a close button.
@@ -34,6 +35,14 @@ Images, video, and audio render in place of a text diff. Media is streamed from 
 
 <p align="center">
   <img src="docs/image-lightbox.png" width="860" alt="Full-screen image viewer with zoom and close controls" />
+</p>
+
+## Branch switching
+
+Click the branch indicator next to the GitHub icon to switch local branches or create a new one. New branches are created from the current `HEAD` and checked out immediately.
+
+<p align="center">
+  <img src="docs/branch-dialog.png" width="640" alt="Branch dialog listing local branches with a new branch field" />
 </p>
 
 ## Requirements
@@ -57,10 +66,11 @@ Restart the Host or reload the page. Replace `desktop` with the profile name sho
 
 1. Open a Git repository in a session.
 2. Click the Git button beside the composer to open the Source Control panel.
-3. Write or generate a commit message, then click **Commit**.
-4. Use **Push** when the branch is ahead of its upstream.
-5. Click a changed file to open its diff; **Open file** shows the full file.
-6. Use the GitHub icon to open the repository or create a new one.
+3. Click the branch indicator in the header to switch or create a branch.
+4. Write or generate a commit message, then click **Commit**.
+5. Use **Push** when the branch is ahead of its upstream.
+6. Click a changed file to open its diff; **Open file** shows the full file.
+7. Use the GitHub icon to open the repository or create a new one.
 
 `Cmd+Enter` / `Ctrl+Enter` in the message field commits.
 
@@ -82,4 +92,5 @@ pnpm build
 - The diff view compares the working tree with `HEAD`; it does not browse history or arbitrary revisions.
 - Diff highlighting runs on the main thread, and the lazy diff chunk is about 10 MB.
 - Media previews show the current working-tree file; deleted media falls back to the binary note.
+- Branch switching lists local branches only; remote branches are not checked out.
 - GitHub support targets `github.com` only.

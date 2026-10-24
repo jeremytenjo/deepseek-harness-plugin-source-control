@@ -158,6 +158,9 @@ async function handleRequest(ctx, req, res) {
       action !== 'status' &&
       action !== 'diff' &&
       action !== 'open-in-vscode' &&
+      action !== 'branches' &&
+      action !== 'switch-branch' &&
+      action !== 'create-branch' &&
       action !== 'generate' &&
       action !== 'commit' &&
       action !== 'push' &&
@@ -221,6 +224,28 @@ async function handleRequest(ctx, req, res) {
         cwd,
         body.path,
         Number.isFinite(line) ? line : 1,
+        deadline.signal,
+      );
+      send(res, 200, { ok: true, ...result });
+      return;
+    }
+
+    if (action === 'branches') {
+      const status = await inspectRepo(ctx, cwd, deadline.signal);
+      if (!status.isRepo) {
+        throw new RequestError(409, 'This session working directory is not a Git repository.');
+      }
+      const branches = await listLocalBranches(ctx, cwd, deadline.signal);
+      send(res, 200, { ok: true, current: status.branch, branches });
+      return;
+    }
+
+    if (action === 'switch-branch' || action === 'create-branch') {
+      const result = await changeBranch(
+        ctx,
+        cwd,
+        body.name,
+        action === 'create-branch',
         deadline.signal,
       );
       send(res, 200, { ok: true, ...result });
@@ -677,6 +702,58 @@ function assertCommittable(status) {
   if (status.changedFiles === 0) {
     throw new RequestError(409, 'There are no uncommitted changes.');
   }
+}
+
+async function listLocalBranches(ctx, cwd, signal) {
+  const result = await runGit(
+    ctx,
+    cwd,
+    ['for-each-ref', '--format=%(refname:short)', 'refs/heads'],
+    signal,
+  );
+  if (result.code !== 0) {
+    throw new RequestError(409, friendlyGitError(result, 'Could not list local branches.'));
+  }
+  return Array.from(
+    new Set(
+      result.stdout
+        .split('\n')
+        .map((name) => name.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+async function changeBranch(ctx, cwd, inputName, create, signal) {
+  const name = typeof inputName === 'string' ? inputName.trim() : '';
+  if (!name || name.length > 255 || name.startsWith('-')) {
+    throw new RequestError(400, 'Enter a valid branch name.');
+  }
+  const status = await inspectRepo(ctx, cwd, signal);
+  if (!status.isRepo) {
+    throw new RequestError(409, 'This session working directory is not a Git repository.');
+  }
+  const checked = await runGit(ctx, cwd, ['check-ref-format', '--branch', name], signal);
+  if (checked.code !== 0) {
+    throw new RequestError(400, 'That is not a valid Git branch name.');
+  }
+  const result = await runGit(
+    ctx,
+    cwd,
+    create ? ['switch', '-c', name] : ['switch', name],
+    signal,
+  );
+  if (result.code !== 0) {
+    throw new RequestError(
+      409,
+      friendlyGitError(
+        result,
+        create ? 'Could not create that branch.' : 'Could not switch branches.',
+      ),
+    );
+  }
+  const next = await inspectRepo(ctx, cwd, signal);
+  return { branch: next.branch };
 }
 
 async function openInVSCode(ctx, cwd, inputPath, line, signal) {

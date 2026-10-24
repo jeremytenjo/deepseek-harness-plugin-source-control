@@ -19,6 +19,7 @@ import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
 import { ensureTailwindStyles } from '../lib/styles';
 import { cn } from '../lib/utils';
+import { BranchDialog } from './BranchDialog';
 import { GitHubDialog } from './GitHubDialog';
 import type {
   ChangedFile,
@@ -88,6 +89,7 @@ export function SourceControlPanel({
   feedback,
   changesOpen,
   github,
+  branch,
   restarting,
   canRestart,
   canGenerate,
@@ -108,6 +110,11 @@ export function SourceControlPanel({
   onToggleChanges,
   onOpenDiff,
   onOpenGitHub,
+  onOpenBranches,
+  onCloseBranches,
+  onSwitchBranch,
+  onNewBranchName,
+  onCreateBranch,
   onRestart,
   onCloseGitHub,
   onChooseVisibility,
@@ -118,66 +125,64 @@ export function SourceControlPanel({
   const messageId = React.useId();
   const changesId = React.useId();
   const commitsId = React.useId();
-  const branch = status?.isRepo ? status.branch || 'HEAD' : '';
+  const branchName = status?.isRepo ? status.branch || 'HEAD' : '';
   const showStatusLine = busy === 'status' || !status || !status.isRepo;
   const FeedbackIcon =
     feedback?.kind === 'error' ? CircleAlert : feedback?.kind === 'success' ? CircleCheck : Info;
 
   return (
     <div className="dshcm-ui dshcm-flex dshcm-h-full dshcm-min-h-0 dshcm-flex-col dshcm-gap-3 dshcm-overflow-y-auto dshcm-bg-transparent dshcm-px-3.5 dshcm-pb-4 dshcm-pt-3 dshcm-text-foreground">
-      <header className="dshcm-flex dshcm-items-start dshcm-gap-2">
-        <div className="dshcm-min-w-0 dshcm-flex-1">
-          <h2 className="dshcm-text-[13px] dshcm-font-semibold dshcm-tracking-[-0.01em]">
-            {t('title')}
-          </h2>
+      <header className="dshcm-flex dshcm-items-center dshcm-gap-2">
+        <h2 className="dshcm-shrink-0 dshcm-text-[13px] dshcm-font-semibold dshcm-tracking-[-0.01em]">
+          {t('title')}
+        </h2>
+        <div className="dshcm-ml-auto dshcm-flex dshcm-min-w-0 dshcm-items-center dshcm-gap-1">
           {status?.isRepo ? (
-            <div className="dshcm-mt-1 dshcm-flex dshcm-min-w-0 dshcm-items-center dshcm-gap-1.5 dshcm-text-[11.5px]">
+            <button
+              type="button"
+              onClick={onOpenBranches}
+              disabled={Boolean(busy)}
+              title={t('branchOpen')}
+              className="dshcm-flex dshcm-h-7 dshcm-min-w-0 dshcm-max-w-[220px] dshcm-items-center dshcm-gap-1 dshcm-rounded-md dshcm-border-0 dshcm-bg-transparent dshcm-px-1.5 dshcm-text-[11.5px] dshcm-transition-colors hover:dshcm-bg-secondary focus-visible:dshcm-outline-none focus-visible:dshcm-ring-1 focus-visible:dshcm-ring-ring disabled:dshcm-pointer-events-none disabled:dshcm-opacity-50"
+            >
               <GitBranch className="dshcm-size-3.5 dshcm-flex-none dshcm-text-muted-foreground" />
               <span
                 className="dshcm-max-w-[45%] dshcm-truncate dshcm-font-medium dshcm-text-foreground"
-                title={branch}
+                title={branchName}
               >
-                {branch}
+                {branchName}
               </span>
               {status.upstream ? (
                 <>
                   <span aria-hidden="true" className="dshcm-flex-none dshcm-text-muted-foreground">
                     →
                   </span>
-                  <span
-                    className="dshcm-min-w-0 dshcm-flex-1 dshcm-truncate dshcm-text-[11px] dshcm-text-muted-foreground"
-                    title={status.upstream}
-                  >
+                  <span className="dshcm-min-w-0 dshcm-flex-1 dshcm-truncate dshcm-text-[11px] dshcm-text-muted-foreground">
                     {status.upstream}
                   </span>
                 </>
               ) : null}
-              {status.upstream && (status.ahead > 0 || status.behind > 0) ? (
-                <div className="dshcm-ml-auto dshcm-flex dshcm-flex-none dshcm-items-center dshcm-gap-1">
-                  {status.ahead > 0 ? (
-                    <span
-                      className="dshcm-flex dshcm-items-center dshcm-gap-0.5 dshcm-rounded dshcm-bg-secondary dshcm-px-1 dshcm-py-0.5 dshcm-text-[11px] dshcm-tabular-nums dshcm-text-foreground"
-                      title={fmt('aheadBy', { count: status.ahead })}
-                    >
-                      <ArrowUp className="dshcm-size-3" aria-hidden="true" />
-                      {status.ahead}
-                    </span>
-                  ) : null}
-                  {status.behind > 0 ? (
-                    <span
-                      className="dshcm-flex dshcm-items-center dshcm-gap-0.5 dshcm-rounded dshcm-bg-secondary dshcm-px-1 dshcm-py-0.5 dshcm-text-[11px] dshcm-tabular-nums dshcm-text-muted-foreground"
-                      title={fmt('behindBy', { count: status.behind })}
-                    >
-                      <ArrowDown className="dshcm-size-3" aria-hidden="true" />
-                      {status.behind}
-                    </span>
-                  ) : null}
-                </div>
+              {status.upstream && status.ahead > 0 ? (
+                <span
+                  className="dshcm-flex dshcm-flex-none dshcm-items-center dshcm-gap-0.5 dshcm-text-[11px] dshcm-tabular-nums dshcm-text-foreground"
+                  title={fmt('aheadBy', { count: status.ahead })}
+                >
+                  <ArrowUp className="dshcm-size-3" aria-hidden="true" />
+                  {status.ahead}
+                </span>
               ) : null}
-            </div>
+              {status.upstream && status.behind > 0 ? (
+                <span
+                  className="dshcm-flex dshcm-flex-none dshcm-items-center dshcm-gap-0.5 dshcm-text-[11px] dshcm-tabular-nums dshcm-text-muted-foreground"
+                  title={fmt('behindBy', { count: status.behind })}
+                >
+                  <ArrowDown className="dshcm-size-3" aria-hidden="true" />
+                  {status.behind}
+                </span>
+              ) : null}
+              <ChevronDown className="dshcm-size-3 dshcm-flex-none dshcm-text-muted-foreground" />
+            </button>
           ) : null}
-        </div>
-        <div className="dshcm-flex dshcm-flex-none dshcm-items-center dshcm-gap-1">
           <Button
             variant="ghost"
             size="icon"
@@ -185,6 +190,7 @@ export function SourceControlPanel({
             onClick={onOpenGitHub}
             aria-label={githubLabel}
             title={githubLabel}
+            className="dshcm-shrink-0"
           >
             <Github className="dshcm-size-3.5" />
           </Button>
@@ -195,6 +201,7 @@ export function SourceControlPanel({
             onClick={onRefresh}
             aria-label={t('refreshAria')}
             title={t('refreshAria')}
+            className="dshcm-shrink-0"
           >
             <RefreshCw
               className={cn('dshcm-size-3.5', busy === 'status' && 'dshcm-animate-spin')}
@@ -418,6 +425,15 @@ export function SourceControlPanel({
           </ul>
         </section>
       ) : null}
+
+      <BranchDialog
+        branch={branch}
+        t={t}
+        onClose={onCloseBranches}
+        onSwitch={onSwitchBranch}
+        onNewName={onNewBranchName}
+        onCreate={onCreateBranch}
+      />
 
       <GitHubDialog
         github={github}

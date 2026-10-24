@@ -84,6 +84,22 @@ const h = React.createElement;
       pushMany: 'Push {count} commits',
       pushing: 'Pushing…',
       pushAria: 'Push unpushed commits to the upstream branch',
+      branchOpen: 'Switch or create a branch',
+      branchModalTitle: 'Switch branch',
+      branchModalDescription: 'Choose a local branch or create a new one from the current HEAD.',
+      branchListLabel: 'Local branches',
+      branchCurrent: 'Current',
+      branchLoading: 'Loading branches…',
+      branchEmpty: 'No local branches yet.',
+      branchCreateLabel: 'New branch',
+      branchCreatePlaceholder: 'feature/my-branch',
+      branchCreateButton: 'Create and switch',
+      branchCreating: 'Creating…',
+      branchSwitching: 'Switching…',
+      branchCreateHint: 'The new branch is created from the current HEAD and checked out.',
+      branchSwitched: 'Switched to {branch}.',
+      branchCreated: 'Created and switched to {branch}.',
+      branchClose: 'Close',
       githubOpen: 'Open the GitHub repository',
       githubCreate: 'Create a GitHub repository',
       githubModalTitle: 'Connect to GitHub',
@@ -172,6 +188,22 @@ const h = React.createElement;
       pushMany: '推送 {count} 个提交',
       pushing: '正在推送…',
       pushAria: '将未推送的提交推送到上游分支',
+      branchOpen: '切换或创建分支',
+      branchModalTitle: '切换分支',
+      branchModalDescription: '选择本地分支，或从当前 HEAD 创建一个新分支。',
+      branchListLabel: '本地分支',
+      branchCurrent: '当前',
+      branchLoading: '正在加载分支…',
+      branchEmpty: '还没有本地分支。',
+      branchCreateLabel: '新分支',
+      branchCreatePlaceholder: 'feature/my-branch',
+      branchCreateButton: '创建并切换',
+      branchCreating: '正在创建…',
+      branchSwitching: '正在切换…',
+      branchCreateHint: '新分支将从当前 HEAD 创建并切换过去。',
+      branchSwitched: '已切换到 {branch}。',
+      branchCreated: '已创建并切换到 {branch}。',
+      branchClose: '关闭',
       githubOpen: '打开 GitHub 仓库',
       githubCreate: '创建 GitHub 仓库',
       githubModalTitle: '连接到 GitHub',
@@ -486,6 +518,7 @@ const h = React.createElement;
       const [feedback, setFeedback] = React.useState(null);
       const [changesOpen, setChangesOpen] = React.useState(true);
       const [github, setGithub] = React.useState(null);
+      const [branch, setBranch] = React.useState(null);
       const [restarting, setRestarting] = React.useState(false);
       const active = React.useRef(null);
       const focusController = React.useRef(null);
@@ -533,6 +566,7 @@ const h = React.createElement;
           setMessage('');
           setFeedback(null);
           setGithub(null);
+          setBranch(null);
         }
         setBusy('status');
         request('status', {}, controller.signal)
@@ -728,6 +762,109 @@ const h = React.createElement;
         }
       }
 
+      async function openBranches() {
+        if (!status || !status.isRepo || busy) return;
+        setBranch({
+          loading: true,
+          busy: '',
+          current: status.branch || '',
+          branches: [],
+          name: '',
+          error: '',
+        });
+        try {
+          const data = await request('branches', {});
+          setBranch((current) =>
+            current
+              ? {
+                  ...current,
+                  loading: false,
+                  current: typeof data.current === 'string' ? data.current : current.current,
+                  branches: Array.isArray(data.branches)
+                    ? data.branches.filter((name) => typeof name === 'string')
+                    : [],
+                  error: '',
+                }
+              : current,
+          );
+        } catch (error) {
+          setBranch((current) =>
+            current
+              ? {
+                  ...current,
+                  loading: false,
+                  error: error instanceof Error ? error.message : String(error),
+                }
+              : current,
+          );
+        }
+      }
+
+      function closeBranches() {
+        setBranch((current) => (current && current.busy ? current : null));
+      }
+
+      function setNewBranchName(name) {
+        setBranch((current) => (current ? { ...current, name, error: '' } : current));
+      }
+
+      async function finishBranchChange(name, messageKey) {
+        setBranch(null);
+        try {
+          const data = await request('status', {});
+          setStatus(readStatus(data));
+        } catch (error) {
+          setFeedback({ kind: 'error', text: error instanceof Error ? error.message : String(error) });
+          return;
+        }
+        setFeedback({
+          kind: 'success',
+          text: format(translate, messageKey, { branch: name }),
+        });
+      }
+
+      async function switchBranch(name) {
+        if (!branch || branch.busy || !name || name === branch.current) return;
+        setBranch((current) => (current ? { ...current, busy: 'switch', error: '' } : current));
+        try {
+          await request('switch-branch', { name });
+        } catch (error) {
+          setBranch((current) =>
+            current
+              ? {
+                  ...current,
+                  busy: '',
+                  error: error instanceof Error ? error.message : String(error),
+                }
+              : current,
+          );
+          return;
+        }
+        await finishBranchChange(name, 'branchSwitched');
+      }
+
+      async function createBranch() {
+        if (!branch || branch.busy) return;
+        const name = branch.name.trim();
+        if (!name) return;
+        setBranch((current) => (current ? { ...current, busy: 'create', error: '' } : current));
+        try {
+          await request('create-branch', { name });
+        } catch (error) {
+          setBranch((current) =>
+            current
+              ? {
+                  ...current,
+                  busy: '',
+                  error: error instanceof Error ? error.message : String(error),
+                }
+              : current,
+          );
+          return;
+        }
+        await finishBranchChange(name, 'branchCreated');
+      }
+
       const canGenerate = Boolean(status && status.isRepo && status.changedFiles > 0) && !busy;
       const canCommit = canGenerate && message.trim().length > 0;
       const canPush = Boolean(status && status.hasCommits && status.ahead > 0) && !busy;
@@ -842,6 +979,7 @@ const h = React.createElement;
         feedback,
         changesOpen,
         github,
+        branch,
         restarting,
         canRestart,
         canGenerate,
@@ -862,6 +1000,11 @@ const h = React.createElement;
         onToggleChanges: () => setChangesOpen((value) => !value),
         onOpenDiff: openDiff,
         onOpenGitHub: openGitHub,
+        onOpenBranches: openBranches,
+        onCloseBranches: closeBranches,
+        onSwitchBranch: switchBranch,
+        onNewBranchName: setNewBranchName,
+        onCreateBranch: createBranch,
         onRestart: restartHarness,
         onCloseGitHub: closeGitHub,
         onChooseVisibility: chooseRepositoryVisibility,
