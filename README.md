@@ -66,7 +66,7 @@ Restart the Host or reload the page. Replace `desktop` with the profile name sho
 
 ## Development
 
-The browser half is built from TSX with React, Tailwind CSS, shadcn primitives, and Lucide icons. `client.js` is the eager panel bundle; the `@pierre/diffs` renderer lives in `client.diff.js` and loads lazily.
+The browser half is built from TSX with React, Tailwind CSS, shadcn primitives, and Lucide icons. `client.js` is the eager panel bundle; the `@pierre/diffs` renderer lives in `client.diff.js` and loads lazily. `src/client.tsx` is the build entry and re-exports `src/client-controller.js`, which owns Host RPC, state, translations, and sidebar wiring.
 
 ```bash
 pnpm install

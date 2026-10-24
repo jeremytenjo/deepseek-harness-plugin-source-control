@@ -1,3 +1,3 @@
-import { apply, inject } from './legacy-client.js';
+import { apply, inject } from './client-controller.js';
 
 export { apply, inject };

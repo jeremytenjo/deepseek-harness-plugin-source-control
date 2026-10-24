@@ -1,3 +1,5 @@
+// Browser-side controller for the source-control plugin: Host RPC, state,
+// translations, composer/tab wiring, and mounting the TSX views.
 import * as React from 'react';
 import { GitBranch } from 'lucide-react';
 
@@ -1023,7 +1025,7 @@ const h = React.createElement;
       return translate('diffTab').replaceAll('{name}', name);
     }
 
-    const CSS = `
+    const CHROME_CSS = `
 .dshcm-trigger {
   display: inline-flex;
   align-items: center;
@@ -1060,12 +1062,12 @@ const h = React.createElement;
 }
 `;
 
-    function ensureLegacyStyles() {
+    function ensureChromeStyles() {
       if (typeof document === 'undefined') return;
-      if (document.querySelector('style[data-dshcm-legacy]')) return;
+      if (document.querySelector('style[data-dshcm-chrome]')) return;
       const style = document.createElement('style');
       style.dataset.dshcmLegacy = '';
-      style.textContent = CSS;
+      style.textContent = CHROME_CSS;
       document.head.appendChild(style);
     }
 
@@ -1073,11 +1075,11 @@ export const inject = ['slots', 'locale', 'sidebarRightTabs', 'sidebarRight'];
 
 export function apply(ctx) {
         ctx.effect(() => {
-          ensureLegacyStyles();
+          ensureChromeStyles();
           return () => {
-            document.querySelector('style[data-dshcm-legacy]')?.remove();
+            document.querySelector('style[data-dshcm-chrome]')?.remove();
           };
-        }, 'commit-message: legacy styles');
+        }, 'commit-message: chrome styles');
         const t = ctx.locale.bind(NS);
         const Dock = (props) => h(CommitDock, { ...props, clientCtx: ctx });
         const Diff = (props) => h(DiffDock, { ...props, clientCtx: ctx });
