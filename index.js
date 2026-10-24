@@ -9,6 +9,8 @@
 const ROUTE = '/__dsh/commit-message';
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_DIFF_CHARS = 20_000;
+const MAX_FILE_DIFF_CHARS = 60_000;
+const MAX_UNTRACKED_FILE_BYTES = 200_000;
 const MAX_COMMIT_MESSAGE_CHARS = 20_000;
 const MAX_GIT_OUTPUT_BYTES = 8 * 1024 * 1024;
 
@@ -47,7 +49,14 @@ async function handleRequest(ctx, req, res) {
 
     const body = await readJsonBody(req);
     const action = body.action;
-    if (action !== 'status' && action !== 'generate' && action !== 'commit' && action !== 'push') {
+    if (
+      action !== 'status' &&
+      action !== 'diff' &&
+      action !== 'generate' &&
+      action !== 'commit' &&
+      action !== 'push' &&
+      action !== 'create-github'
+    ) {
       throw new RequestError(400, 'Unknown action.');
     }
 
@@ -56,6 +65,22 @@ async function handleRequest(ctx, req, res) {
     if (action === 'status') {
       const status = await inspectRepo(ctx, cwd, deadline.signal);
       send(res, 200, { ok: true, ...publicStatus(status) });
+      return;
+    }
+
+    if (action === 'diff') {
+      const status = await inspectRepo(ctx, cwd, deadline.signal);
+      if (!status.isRepo) {
+        throw new RequestError(409, 'This session working directory is not a Git repository.');
+      }
+      const file = findChangedFile(status, body.path);
+      const diff = await loadFileDiff(ctx, status, file, deadline.signal);
+      send(res, 200, {
+        ok: true,
+        path: file.path,
+        status: file.status,
+        ...diff,
+      });
       return;
     }
 
@@ -94,6 +119,12 @@ async function handleRequest(ctx, req, res) {
         upstream: next.upstream || status.upstream,
         ...publicStatus(next),
       });
+      return;
+    }
+
+    if (action === 'create-github') {
+      const created = await createGitHubRepository(ctx, cwd, body, deadline.signal);
+      send(res, 200, { ok: true, ...created });
       return;
     }
 
@@ -198,15 +229,17 @@ async function inspectRepo(ctx, cwd, signal) {
       upstream: '',
       ahead: 0,
       behind: 0,
+      githubUrl: '',
     };
   }
 
   const top = topResult.stdout.trim() || cwd;
-  const [statusResult, branchInfoResult, headResult, prefixResult] = await Promise.all([
+  const [statusResult, branchInfoResult, headResult, prefixResult, remotesResult] = await Promise.all([
     runGit(ctx, cwd, ['status', '--porcelain=v1', '-z', '--untracked-files=all'], signal),
     runGit(ctx, cwd, ['status', '--porcelain=v2', '--branch', '--untracked-files=no'], signal),
     runGit(ctx, cwd, ['rev-parse', '--verify', 'HEAD'], signal),
     runGit(ctx, cwd, ['rev-parse', '--show-prefix'], signal),
+    runGit(ctx, cwd, ['remote', '-v'], signal),
   ]);
 
   if (statusResult.code !== 0) {
@@ -220,6 +253,7 @@ async function inspectRepo(ctx, cwd, signal) {
   }));
   const branchInfo = parseBranchInfo(branchInfoResult.stdout);
   const hasCommits = headResult.code === 0;
+  const githubUrl = remotesResult.code === 0 ? githubRemoteUrl(remotesResult.stdout) : '';
 
   let commits = [];
   if (hasCommits && branchInfo.upstream) {
@@ -248,6 +282,7 @@ async function inspectRepo(ctx, cwd, signal) {
     behind: branchInfo.behind,
     hasCommits,
     commits,
+    githubUrl,
     changedFiles: files.length,
     stagedFiles: files.filter((file) => file.staged).length,
     unstagedFiles: files.filter((file) => file.unstaged).length,
@@ -273,6 +308,39 @@ function parseBranchInfo(raw) {
     }
   }
   return info;
+}
+
+function githubRemoteUrl(raw) {
+  const candidates = [];
+  for (const line of String(raw).split('\n')) {
+    const match = line.match(/^(\S+)\t(\S+)\s+\((fetch|push)\)$/);
+    if (!match) continue;
+    const url = githubWebUrl(match[2]);
+    if (url) candidates.push({ name: match[1], url });
+  }
+  if (candidates.length === 0) return '';
+  return (candidates.find((candidate) => candidate.name === 'origin') || candidates[0]).url;
+}
+
+function githubWebUrl(remote) {
+  const text = String(remote || '').trim();
+  let path = '';
+  const scp = text.match(/^(?:[^@/\s]+@)?github\.com:([\s\S]+)$/i);
+  if (scp) {
+    path = scp[1];
+  } else {
+    try {
+      const parsed = new URL(text);
+      if (parsed.hostname.toLowerCase() !== 'github.com') return '';
+      path = parsed.pathname;
+    } catch {
+      return '';
+    }
+  }
+  path = path.replace(/^\/+/, '').replace(/\/+$/, '').replace(/\.git$/i, '');
+  const parts = path.split('/').filter(Boolean);
+  if (parts.length !== 2) return '';
+  return `https://github.com/${parts[0]}/${parts[1]}`;
 }
 
 function parseCommits(raw) {
@@ -331,6 +399,238 @@ function assertCommittable(status) {
   if (status.changedFiles === 0) {
     throw new RequestError(409, 'There are no uncommitted changes.');
   }
+}
+
+function findChangedFile(status, input) {
+  if (typeof input !== 'string' || input.length === 0 || input.length > 4096 || input.includes('\0')) {
+    throw new RequestError(400, 'A changed file path is required.');
+  }
+  const file = status.files.find((candidate) => candidate.path === input);
+  if (!file) {
+    throw new RequestError(409, 'That file is not part of the current changes.');
+  }
+  return file;
+}
+
+async function loadFileDiff(ctx, status, file, signal) {
+  const cwd = status.top || status.cwd;
+  if (file.untracked) return loadUntrackedDiff(ctx, cwd, file.path, signal);
+
+  const common = ['--no-color', '--no-ext-diff', '--unified=3'];
+  let raw = '';
+  if (status.hasCommits) {
+    // The working tree against HEAD is exactly what a commit would record.
+    const result = await runGit(ctx, cwd, ['diff', ...common, 'HEAD', '--', file.path], signal);
+    if (result.code !== 0) {
+      throw new RequestError(409, friendlyGitError(result, 'Could not read the file diff.'));
+    }
+    raw = result.stdout;
+  } else {
+    const [staged, unstaged] = await Promise.all([
+      runGit(ctx, cwd, ['diff', ...common, '--cached', '--', file.path], signal),
+      runGit(ctx, cwd, ['diff', ...common, '--', file.path], signal),
+    ]);
+    if (staged.code !== 0 || unstaged.code !== 0) {
+      const failed = staged.code !== 0 ? staged : unstaged;
+      throw new RequestError(409, friendlyGitError(failed, 'Could not read the file diff.'));
+    }
+    raw = [staged.stdout.trimEnd(), unstaged.stdout.trimEnd()].filter(Boolean).join('\n');
+  }
+
+  return limitFileDiff(raw);
+}
+
+async function loadUntrackedDiff(ctx, cwd, path, signal) {
+  let root;
+  let target;
+  try {
+    root = await ctx.fs.resolve('.', { cwd, signal });
+    target = await ctx.fs.resolve(path, { cwd, signal });
+  } catch {
+    throw new RequestError(409, 'Could not read the new file.');
+  }
+  if (!ctx.fs.contains(root, target)) {
+    throw new RequestError(409, 'The new file is outside the repository.');
+  }
+
+  let info;
+  try {
+    info = await ctx.fs.stat(target, signal);
+  } catch {
+    throw new RequestError(409, 'Could not read the new file.');
+  }
+  if (!info || info.type !== 'file') {
+    return { diff: '', truncated: false, binary: true };
+  }
+  if ((info.size ?? 0) > MAX_UNTRACKED_FILE_BYTES) {
+    return { diff: '', truncated: true, binary: false };
+  }
+
+  let text;
+  try {
+    text = await ctx.fs.readText(target, signal);
+  } catch {
+    throw new RequestError(409, 'Could not read the new file.');
+  }
+  if (text.includes('\0')) {
+    return { diff: '', truncated: false, binary: true };
+  }
+
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+  const tooManyLines = lines.length > 4000;
+  const shown = tooManyLines ? lines.slice(0, 4000) : lines;
+
+  const header = [
+    `diff --git a/${path} b/${path}`,
+    'new file mode 100644',
+    '--- /dev/null',
+    `+++ b/${path}`,
+  ];
+  if (shown.length > 0) header.push(`@@ -0,0 +1,${shown.length} @@`);
+  const raw = [...header, ...shown.map((line) => `+${line}`)].join('\n');
+  const limited = limitFileDiff(raw);
+  return {
+    ...limited,
+    truncated: limited.truncated || tooManyLines,
+  };
+}
+
+function limitFileDiff(raw) {
+  const text = String(raw || '').replace(/\r\n/g, '\n').trimEnd();
+  return {
+    diff: text.slice(0, MAX_FILE_DIFF_CHARS),
+    truncated: text.length > MAX_FILE_DIFF_CHARS,
+    binary: /^(?:Binary files .* differ|GIT binary patch)$/m.test(text),
+  };
+}
+
+async function createGitHubRepository(ctx, cwd, body, signal) {
+  const name = normaliseRepoName(body.name);
+  const visibility = body.visibility;
+  if (visibility !== 'private' && visibility !== 'public') {
+    throw new RequestError(400, 'Choose a private or public repository.');
+  }
+
+  const status = await inspectRepo(ctx, cwd, signal);
+  if (!status.isRepo) {
+    throw new RequestError(409, 'This session working directory is not a Git repository.');
+  }
+  if (status.githubUrl) {
+    throw new RequestError(409, 'This repository is already connected to GitHub.');
+  }
+
+  const top = status.top || cwd;
+  const remotes = await runGit(ctx, top, ['remote'], signal);
+  const names = remotes.code === 0
+    ? remotes.stdout.split('\n').map((entry) => entry.trim()).filter(Boolean)
+    : [];
+  const remote = pickRemoteName(names);
+  const executable = await resolveGitHubCli(ctx, signal);
+
+  const created = await runCommand(
+    ctx,
+    executable,
+    [
+      'repo',
+      'create',
+      name,
+      visibility === 'private' ? '--private' : '--public',
+      '--source',
+      '.',
+      '--remote',
+      remote,
+    ],
+    top,
+    signal,
+    {
+      env: {
+        ...process.env,
+        GH_PROMPT_DISABLED: '1',
+        GH_NO_UPDATE_NOTIFIER: '1',
+        GIT_TERMINAL_PROMPT: '0',
+      },
+    },
+  );
+  if (created.code !== 0) {
+    throw new RequestError(409, githubCliError(created));
+  }
+
+  let pushed = false;
+  let pushError = '';
+  if (status.hasCommits && status.branch) {
+    const push = await runGit(ctx, top, ['push', '-u', remote, 'HEAD'], signal, {
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    });
+    if (push.code === 0) pushed = true;
+    else pushError = friendlyGitError(push, 'Git could not push to the new repository.');
+  }
+
+  const next = await inspectRepo(ctx, top, signal);
+  return {
+    ...publicStatus(next),
+    created: true,
+    remote,
+    pushed,
+    pushError,
+  };
+}
+
+function normaliseRepoName(input) {
+  if (typeof input !== 'string') {
+    throw new RequestError(400, 'A repository name is required.');
+  }
+  const name = input.trim();
+  if (!name || name.length > 140 || name.includes('\0')) {
+    throw new RequestError(400, 'A repository name is required.');
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)?$/.test(name)) {
+    throw new RequestError(400, 'Enter a valid GitHub repository name, optionally as owner/name.');
+  }
+  return name;
+}
+
+function pickRemoteName(names) {
+  const used = new Set(names);
+  if (!used.has('origin')) return 'origin';
+  if (!used.has('github')) return 'github';
+  let index = 2;
+  while (used.has(`github-${index}`)) index += 1;
+  return `github-${index}`;
+}
+
+async function resolveGitHubCli(ctx, signal) {
+  const candidates = ['gh'];
+  if (process.platform === 'darwin') {
+    candidates.push('/opt/homebrew/bin/gh', '/usr/local/bin/gh');
+  } else if (process.platform === 'win32') {
+    candidates.push('C:\\Program Files\\GitHub CLI\\gh.exe');
+  } else {
+    candidates.push('/usr/bin/gh', '/usr/local/bin/gh', '/snap/bin/gh');
+  }
+  for (const candidate of candidates) {
+    try {
+      return await ctx.subprocess.resolveExecutable(candidate, undefined, signal);
+    } catch {
+      // Try the next well-known location.
+    }
+  }
+  throw new RequestError(
+    503,
+    'GitHub CLI (gh) is not installed. Install it from https://cli.github.com and run `gh auth login`.',
+  );
+}
+
+function githubCliError(result) {
+  const detail = `${result.stderr || ''}\n${result.stdout || ''}`.trim();
+  if (/auth login|not logged in|authentication|GH_TOKEN|HTTP 401|requires authentication/i.test(detail)) {
+    return 'GitHub CLI is not authenticated. Run `gh auth login`, then try again.';
+  }
+  if (/already exists/i.test(detail)) {
+    return 'A GitHub repository with that name already exists. Choose another name.';
+  }
+  if (!detail) return 'GitHub CLI could not create the repository.';
+  return detail.length > 4000 ? `${detail.slice(0, 4000)}\n[truncated]` : detail;
 }
 
 async function loadChanges(ctx, cwd, status, signal) {
@@ -529,6 +829,7 @@ function publicStatus(status) {
     behind: status.behind,
     hasCommits: status.hasCommits,
     commits: status.commits,
+    githubUrl: status.githubUrl,
     files: status.files.slice(0, 500).map((file) => ({
       path: file.path,
       workspacePath: file.workspacePath,
@@ -545,9 +846,13 @@ function publicStatus(status) {
 }
 
 async function runGit(ctx, cwd, args, signal, options = {}) {
-  const executable = await ctx.subprocess.resolveExecutable('git', undefined, signal);
+  return runCommand(ctx, 'git', args, cwd, signal, options);
+}
+
+async function runCommand(ctx, executable, args, cwd, signal, options = {}) {
+  const resolved = await ctx.subprocess.resolveExecutable(executable, undefined, signal);
   const handle = ctx.subprocess.spawn({
-    argv: [executable, ...args],
+    argv: [resolved, ...args],
     cwd,
     stdio: {
       stdin: 'ignore',
