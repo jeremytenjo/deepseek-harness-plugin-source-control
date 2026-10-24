@@ -656,14 +656,14 @@ window.__ModuleLoader__.load({
       React.useEffect(() => {
         if (!githubOpen) return undefined;
         const onKeyDown = (event) => {
-          if (event.key === 'Escape') {
+          if (event.key === 'Escape' && githubStep !== 'creating') {
             event.preventDefault();
             setGithub(null);
           }
         };
         document.addEventListener('keydown', onKeyDown);
         return () => document.removeEventListener('keydown', onKeyDown);
-      }, [githubOpen]);
+      }, [githubOpen, githubStep]);
 
       React.useEffect(() => {
         if (!github) return;
@@ -1076,7 +1076,7 @@ window.__ModuleLoader__.load({
                   ref: githubButton,
                   type: 'button',
                   className: 'dshcm-iconButton',
-                  disabled: !status || !status.isRepo,
+                  disabled: !status || !status.isRepo || Boolean(busy),
                   onClick: openGitHub,
                   'aria-label': githubLabel,
                   title: githubLabel,
@@ -1188,7 +1188,9 @@ window.__ModuleLoader__.load({
                 {
                   className: 'dshcm-modalBackdrop',
                   onMouseDown: (event) => {
-                    if (event.target === event.currentTarget) setGithub(null);
+                    if (event.target === event.currentTarget && github.step !== 'creating') {
+                      setGithub(null);
+                    }
                   },
                 },
                 h(
@@ -1217,6 +1219,7 @@ window.__ModuleLoader__.load({
                       {
                         type: 'button',
                         className: 'dshcm-iconButton',
+                        disabled: github.step === 'creating',
                         onClick: closeGitHub,
                         'aria-label': translate('githubClose'),
                         title: translate('githubClose'),
