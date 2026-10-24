@@ -56,8 +56,8 @@ Click the branch indicator next to the GitHub icon to switch local branches or c
 ## Install
 
 ```bash
-git clone https://github.com/jeremytenjo/deepseek-harness-plugin-source-control.git
-dsh plugin --profile desktop add ./deepseek-harness-plugin-source-control
+git clone https://github.com/jeremytenjo/dsh-plugin-source-control.git
+dsh plugin --profile desktop add ./dsh-plugin-source-control
 ```
 
 Restart the Host or reload the page. Replace `desktop` with the profile name shown by `dsh --profile <name> --dump-config`.
