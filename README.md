@@ -16,6 +16,7 @@ Review changes, generate commit messages, commit, push, and manage GitHub reposi
 - Commit all changes with `git add -A` and `git commit`; hooks are respected.
 - Per-file diff view with Shiki syntax highlighting from `@pierre/diffs`, line numbers, hunk separators, and worktree-vs-`HEAD` context.
 - Preview changed images, video, and audio directly in the diff panel.
+- Click an image to open a full-screen viewer with wheel/pinch zoom, drag-to-pan, and a close button.
 - Right-click a line in the diff to open the file in VS Code at that line.
 - Push unpushed commits to the configured upstream.
 - Open the connected GitHub repository, or create a private/public repository with `gh`.
@@ -24,10 +25,14 @@ Review changes, generate commit messages, commit, push, and manage GitHub reposi
 
 ## Media previews
 
-Images, video, and audio render in place of a text diff. Media is streamed from a loopback-only route with range support for seeking.
+Images, video, and audio render in place of a text diff. Media is streamed from a loopback-only route with range support for seeking. Click an image to open a full-screen viewer powered by `react-zoom-pan-pinch`; scroll or pinch to zoom, drag to pan, and press Escape or the close button to exit.
 
 <p align="center">
   <img src="docs/media-preview.png" width="860" alt="Image preview inside the diff panel" />
+</p>
+
+<p align="center">
+  <img src="docs/image-lightbox.png" width="860" alt="Full-screen image viewer with zoom and close controls" />
 </p>
 
 ## Requirements

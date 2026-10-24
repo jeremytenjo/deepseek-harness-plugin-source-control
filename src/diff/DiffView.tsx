@@ -290,7 +290,7 @@ export function DiffView({
               className="dshcm-max-h-full dshcm-max-w-full dshcm-rounded-sm dshcm-object-contain"
             />
           </button>
-          <span className="dshcm-pointer-events-none dshcm-absolute dshcm-right-3 dshcm-top-3 dshcm-flex dshcm-items-center dshcm-justify-center dshcm-rounded-md dshcm-bg-background/80 dshcm-p-1.5 dshcm-text-muted-foreground">
+          <span className="dshcm-pointer-events-none dshcm-absolute dshcm-right-3 dshcm-top-3 dshcm-flex dshcm-items-center dshcm-justify-center dshcm-rounded-md dshcm-bg-background dshcm-p-1.5 dshcm-text-muted-foreground">
             <Maximize2 className="dshcm-size-3.5" />
           </span>
         </div>
