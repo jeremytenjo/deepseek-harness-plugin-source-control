@@ -70,6 +70,7 @@ export function BranchDialog({
               </span>
             </div>
 
+            {branch.error && !branch.loading && branches.length === 0 ? null : (
             <div
               className="dshcm-max-h-[224px] dshcm-overflow-y-auto dshcm-rounded-md dshcm-border dshcm-border-border"
               aria-label={t('branchListLabel')}
@@ -117,6 +118,7 @@ export function BranchDialog({
                 </div>
               )}
             </div>
+            )}
 
             {branch.error ? (
               <div

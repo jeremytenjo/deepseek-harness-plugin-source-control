@@ -762,6 +762,11 @@ const h = React.createElement;
         }
       }
 
+      function branchError(error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return /unknown action/i.test(message) ? translate('hostOutdated') : message;
+      }
+
       async function openBranches() {
         if (!status || !status.isRepo || busy) return;
         setBranch({
@@ -793,7 +798,7 @@ const h = React.createElement;
               ? {
                   ...current,
                   loading: false,
-                  error: error instanceof Error ? error.message : String(error),
+                  error: branchError(error),
                 }
               : current,
           );
@@ -834,7 +839,7 @@ const h = React.createElement;
               ? {
                   ...current,
                   busy: '',
-                  error: error instanceof Error ? error.message : String(error),
+                  error: branchError(error),
                 }
               : current,
           );
@@ -856,7 +861,7 @@ const h = React.createElement;
               ? {
                   ...current,
                   busy: '',
-                  error: error instanceof Error ? error.message : String(error),
+                  error: branchError(error),
                 }
               : current,
           );
