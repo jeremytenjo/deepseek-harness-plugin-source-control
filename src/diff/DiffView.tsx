@@ -4,8 +4,10 @@ import { FileDiff } from '@pierre/diffs/react';
 import { ExternalLink, FileCode2, RefreshCw } from 'lucide-react';
 
 import { Button } from '../components/ui/button';
+import { ensureTailwindStyles } from '../lib/styles';
 import { cn } from '../lib/utils';
 
+ensureTailwindStyles();
 
 type DiffPhase = 'loading' | 'ready' | 'error';
 
@@ -59,20 +61,6 @@ const DIFF_UNSAFE_CSS = `
   background: transparent !important;
 }
 `;
-
-let stylesInjected = false;
-
-function injectStyles(): void {
-  if (stylesInjected || typeof document === 'undefined') return;
-  stylesInjected = true;
-  document.querySelector('style[data-dshcm-diff]')?.remove();
-  const style = document.createElement('style');
-  style.dataset.dshcmDiff = '';
-  style.textContent = __DSHCM_TAILWIND_CSS__;
-  document.head.appendChild(style);
-}
-
-if (typeof document !== 'undefined') injectStyles();
 
 function hashString(input: string): string {
   let hash = 0x811c9dc5;
@@ -241,7 +229,7 @@ export function DiffView({
   }
 
   return (
-    <div className="dshcm-ui dshcm-flex dshcm-h-full dshcm-min-h-0 dshcm-flex-col dshcm-gap-2 dshcm-bg-background dshcm-px-[14px] dshcm-py-3 dshcm-text-foreground">
+    <div className="dshcm-ui dshcm-flex dshcm-h-full dshcm-min-h-0 dshcm-flex-col dshcm-gap-2 dshcm-bg-transparent dshcm-px-[14px] dshcm-py-3 dshcm-text-foreground">
       <div className="dshcm-flex dshcm-flex-wrap dshcm-items-center dshcm-gap-2">
         <div className="dshcm-flex dshcm-min-w-0 dshcm-flex-1 dshcm-items-center dshcm-gap-1.5">
           <FileCode2 className="dshcm-h-3.5 dshcm-w-3.5 dshcm-flex-none dshcm-text-muted-foreground" />

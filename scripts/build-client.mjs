@@ -33,13 +33,14 @@ const common = {
   format: 'cjs',
   platform: 'browser',
   target: ['chrome120', 'safari17'],
-  external: ['react'],
+  external: ['react', 'react-dom', 'react-dom/client'],
   jsx: 'automatic',
   minify: true,
   legalComments: 'none',
   logLevel: 'warning',
   define: {
     'process.env.NODE_ENV': '"production"',
+    __DSHCM_TAILWIND_CSS__: JSON.stringify(tailwindCss),
   },
 };
 
@@ -47,10 +48,7 @@ await build({
   ...common,
   entryPoints: [resolve(root, 'src/diff/index.ts')],
   outfile: resolve(buildDir, 'client.diff.cjs'),
-  define: {
-    ...common.define,
-    __DSHCM_TAILWIND_CSS__: JSON.stringify(tailwindCss),
-  },
+
 });
 
 await build({

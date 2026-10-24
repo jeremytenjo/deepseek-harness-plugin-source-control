@@ -73,9 +73,11 @@ Only commits ahead of the upstream are listed. After a successful push that list
 | `client.js` | Built browser entry: source-control panel, per-file diff tabs, commit list, generation and action controls |
 | `client.diff.js` | Lazily loaded chunk with `@pierre/diffs`, Sidebar diff UI, Tailwind and shadcn primitives |
 | `src/client.tsx` | TSX entry for the built client |
-| `src/legacy-client.js` | Source-control panel, GitHub flow, and data fetching; now imported by the TSX entry |
+| `src/legacy-client.js` | Host-route calls, status/commit/push/GitHub actions, composer trigger, tab title, and lazy diff wiring |
+| `src/panel/SourceControlPanel.tsx` | shadcn/Tailwind source-control panel and changes/commit lists |
+| `src/panel/GitHubDialog.tsx` | shadcn Dialog for private/public GitHub repository creation |
 | `src/diff/DiffView.tsx` | T3-style diff surface and header |
-| `src/components/ui/button.tsx` | shadcn-style Button used by the diff view |
+| `src/components/ui/button.tsx`, `input.tsx`, `textarea.tsx`, `dialog.tsx` | shadcn primitives used by the panel and modal |
 | `src/styles.css`, `tailwind.config.cjs` | Tailwind entry and prefixed configuration |
 | `components.json` | shadcn configuration (`dshcm-` class prefix) |
 | `scripts/build-client.mjs` | Builds the main bundle and the lazy diff chunk |
@@ -85,7 +87,7 @@ Only commits ahead of the upstream are listed. After a successful push that list
 
 ## Development notes
 
-The browser half is built from TSX with React, Tailwind CSS, and shadcn-style primitives. `client.js` is the small eager entry; the `@pierre/diffs` renderer lives in `client.diff.js` and is fetched with `require.async` only when a diff tab first opens. Both artifacts use the Harness lazy-CJS module wrapper and externalize `react` / `react/jsx-runtime`.
+The browser half is built from TSX with React, Tailwind CSS, and shadcn primitives (Button, Input, Textarea, Radix Dialog). All icons come from `lucide-react`, including the composer trigger and tab title. `client.js` is the eager entry containing the source-control panel and GitHub modal; the `@pierre/diffs` renderer lives in `client.diff.js` and is fetched with `require.async` only when a diff tab first opens. Both artifacts use the Harness lazy-CJS module wrapper and externalize `react`, `react-dom`, and `react/jsx-runtime`.
 
 The Host half has no dependencies.
 
