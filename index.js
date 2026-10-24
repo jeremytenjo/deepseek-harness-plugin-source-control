@@ -6,6 +6,8 @@
  * session's current model route.
  */
 
+import { spawn } from 'node:child_process';
+
 const ROUTE = '/__dsh/commit-message';
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_DIFF_CHARS = 20_000;
@@ -22,6 +24,41 @@ class RequestError extends Error {
     this.name = 'RequestError';
     this.status = status;
   }
+}
+
+async function restartHarness() {
+  let electron;
+  try {
+    electron = await import('electron');
+  } catch {
+    electron = undefined;
+  }
+  const app = electron?.app ?? electron?.default?.app;
+  if (app && typeof app.relaunch === 'function' && typeof app.exit === 'function') {
+    // Let the HTTP response flush before the app tears the server down.
+    setTimeout(() => {
+      try {
+        app.relaunch();
+        app.exit(0);
+      } catch (error) {
+        console.error('commit-message: could not restart the harness', error);
+      }
+    }, 500);
+    return { method: 'electron' };
+  }
+
+  if (process.versions.electron && process.platform === 'darwin') {
+    const script =
+      'sleep 1; /usr/bin/osascript -e \'tell application "DeepSeek Harness" to quit\'; sleep 2; /usr/bin/open -a "DeepSeek Harness"';
+    const child = spawn('/bin/sh', ['-c', script], { detached: true, stdio: 'ignore' });
+    child.unref();
+    return { method: 'apple-script' };
+  }
+
+  throw new RequestError(
+    503,
+    'Automatic restart is unavailable in this Host. Quit and reopen DeepSeek Harness.',
+  );
 }
 
 export function apply(ctx) {
@@ -55,9 +92,16 @@ async function handleRequest(ctx, req, res) {
       action !== 'generate' &&
       action !== 'commit' &&
       action !== 'push' &&
-      action !== 'create-github'
+      action !== 'create-github' &&
+      action !== 'restart-harness'
     ) {
       throw new RequestError(400, 'Unknown action.');
+    }
+
+    if (action === 'restart-harness') {
+      const result = await restartHarness();
+      send(res, 200, { ok: true, ...result });
+      return;
     }
 
     const { session, cwd } = await resolveSessionDirectory(ctx, body.sessionId, deadline.signal);

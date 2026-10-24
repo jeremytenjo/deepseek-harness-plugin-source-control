@@ -77,6 +77,10 @@ const h = React.createElement;
       commitAria: 'Commit all current changes with this message',
       detached: 'detached HEAD',
       hostOutdated: 'The running Host is using an older version of the source-control plugin. Restart the Host or reload the plugin, then try again.',
+      restart: 'Restart',
+      restartTitle: 'Restart DeepSeek Harness',
+      restarting: 'Restarting…',
+      restartFailed: 'Could not restart the harness.',
       requestFailed: 'The commit message request failed.',
       networkFailed: 'Could not reach the Harness host.',
       unreadable: 'The commit message endpoint returned an unreadable response.',
@@ -151,6 +155,10 @@ const h = React.createElement;
       commitAria: '使用这条信息提交所有当前更改',
       detached: '游离 HEAD',
       hostOutdated: '当前运行的 Host 仍在使用旧版源代码管理插件。请重启 Host 或重新加载插件后再试。',
+      restart: '重启',
+      restartTitle: '重启 DeepSeek Harness',
+      restarting: '正在重启…',
+      restartFailed: '无法重启 Harness。',
       requestFailed: '提交信息请求失败。',
       networkFailed: '无法连接到 Harness 主机。',
       unreadable: '提交信息接口返回了无法解析的响应。',
@@ -586,6 +594,7 @@ const h = React.createElement;
       const [feedback, setFeedback] = React.useState(null);
       const [changesOpen, setChangesOpen] = React.useState(true);
       const [github, setGithub] = React.useState(null);
+      const [restarting, setRestarting] = React.useState(false);
       const active = React.useRef(null);
       const focusController = React.useRef(null);
       const busyRef = React.useRef('status');
@@ -893,6 +902,24 @@ const h = React.createElement;
         }
       }
 
+      async function restartHarness() {
+        if (restarting) return;
+        setRestarting(true);
+        try {
+          await request('restart-harness', {});
+          setFeedback({ kind: 'info', text: translate('restarting') });
+        } catch (error) {
+          setRestarting(false);
+          setFeedback({
+            kind: 'error',
+            text:
+              error instanceof Error && error.message
+                ? error.message
+                : translate('restartFailed'),
+          });
+        }
+      }
+
       function onMessageKeyDown(event) {
         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && canCommit) {
           event.preventDefault();
@@ -917,6 +944,11 @@ const h = React.createElement;
         status && status.githubUrl ? translate('githubOpen') : translate('githubCreate');
       const githubIdSuffix = String(sessionId).replace(/[^A-Za-z0-9_-]/g, '-');
       const githubTitleId = `dshcm-github-title-${githubIdSuffix}`;
+      const canRestart = Boolean(
+        feedback &&
+          feedback.kind === 'error' &&
+          /no longer live|source-control plugin|源代码管理插件/i.test(feedback.text),
+      );
       const githubNameId = `dshcm-github-name-${githubIdSuffix}`;
       const changesSection = status && status.isRepo
         ? h(
@@ -1057,7 +1089,20 @@ const h = React.createElement;
                   role: 'status',
                   'aria-live': 'polite',
                 },
-                feedback.text,
+                h('span', { className: 'dshcm-feedbackText' }, feedback.text),
+                canRestart
+                  ? h(
+                      'button',
+                      {
+                        type: 'button',
+                        className: 'dshcm-restartButton',
+                        disabled: restarting,
+                        onClick: restartHarness,
+                        title: translate('restartTitle'),
+                      },
+                      restarting ? translate('restarting') : translate('restart'),
+                    )
+                  : null,
               )
             : null,
           h(
@@ -1967,8 +2012,41 @@ const h = React.createElement;
   white-space: nowrap;
 }
 .dshcm-feedback {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   padding: 0 0 8px;
   font-size: 12px;
+}
+.dshcm-feedbackText {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.dshcm-restartButton {
+  flex: 0 0 auto;
+  min-height: 22px;
+  padding: 1px 7px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: background 100ms ease, border-color 100ms ease;
+}
+.dshcm-restartButton:hover:not(:disabled) {
+  background: var(--dsw-alias-bg-layer-2);
+  border-color: var(--dsw-alias-border-l3);
+}
+.dshcm-restartButton:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 1px;
+}
+.dshcm-restartButton:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 .dshcm-feedback--error {
   color: var(--dsw-alias-state-error-primary);

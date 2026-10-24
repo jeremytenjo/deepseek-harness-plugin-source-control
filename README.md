@@ -11,6 +11,7 @@ The Git button beside the chat submit button toggles the session's right sidebar
 - **Commit changes** stages all current changes (`git add -A`) and commits them.
 - **Changes** lists every modified, added, and untracked file; click a file to open its unified diff in a sidebar tab.
 - **Diff view** shows the working tree against `HEAD` (or the staged and unstaged changes before the first commit) with T3-style syntax highlighting from `@pierre/diffs`, line numbers, hunk separators, and added/removed counts; **Open file** switches to the full file viewer.
+- **Restart** appears beside a dead-session or out-of-date-Host error and restarts the desktop app and Host in place.
 - Shows **only unpushed commits**, with short hash, subject, author, and date.
 - **Push commits** appears when the local branch is ahead of its upstream, and pushes with `git push`.
 - **GitHub** opens the connected GitHub repository from the panel header. When the repository has no GitHub remote, it offers to create a private or public repository with the GitHub CLI, adds the remote, and pushes the current branch.
@@ -60,6 +61,7 @@ Only commits ahead of the upstream are listed. After a successful push that list
 - The browser talks to one exact loopback-only Host route (`POST /__dsh/commit-message`).
 - Git commands and `gh repo create` are spawned with an argv array, never through a shell.
 - Repository creation never uses a force-push; it pushes the current branch with `git push -u <remote> HEAD`.
+- Restarting is a loopback-only action handled before session lookup. It uses Electron `app.relaunch()`; on macOS it falls back to a fixed AppleScript relaunch when the Electron handle is unavailable.
 - The route rejects non-loopback clients, cross-origin requests, non-JSON bodies, and oversized bodies.
 - If the profile's Web GUI is exposed beyond loopback, the panel is intentionally unavailable.
 
