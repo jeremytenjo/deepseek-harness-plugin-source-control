@@ -3,7 +3,7 @@
 Review changes, generate commit messages, commit, push, and manage GitHub repositories from the session's right sidebar.
 
 <p align="center">
-  <img src="docs/source-control.png" width="680" alt="Source Control panel showing a commit message, changes, and GitHub and refresh controls" />
+  <img src="docs/source-control.png" width="680" alt="Source Control panel showing branch and upstream state, a commit message, changes, and unpushed commits" />
 </p>
 
 <p align="center">
@@ -14,6 +14,7 @@ Review changes, generate commit messages, commit, push, and manage GitHub reposi
 
 - Generate a Conventional Commits message from the current diff using the session's model.
 - Commit all changes with `git add -A` and `git commit`; hooks are respected.
+- See the current branch, upstream, and ahead/behind state at a glance.
 - Per-file diff view with Shiki syntax highlighting from `@pierre/diffs`, line numbers, hunk separators, and worktree-vs-`HEAD` context.
 - Preview changed images, video, and audio directly in the diff panel.
 - Click an image to open a full-screen viewer with wheel/pinch zoom, drag-to-pan, and a close button.

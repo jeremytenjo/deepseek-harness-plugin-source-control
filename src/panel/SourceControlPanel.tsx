@@ -1,9 +1,15 @@
 import * as React from 'react';
 import {
+  ArrowDown,
+  ArrowUp,
   Check,
   ChevronDown,
   ChevronRight,
+  CircleAlert,
+  CircleCheck,
   Github,
+  GitBranch,
+  Info,
   RefreshCw,
   Sparkles,
   Upload,
@@ -109,13 +115,69 @@ export function SourceControlPanel({
   onRepositoryName,
   onCreateRepository,
 }: SourceControlPanelProps) {
+  const messageId = React.useId();
+  const changesId = React.useId();
+  const commitsId = React.useId();
+  const branch = status?.isRepo ? status.branch || 'HEAD' : '';
+  const showStatusLine = busy === 'status' || !status || !status.isRepo;
+  const FeedbackIcon =
+    feedback?.kind === 'error' ? CircleAlert : feedback?.kind === 'success' ? CircleCheck : Info;
+
   return (
-    <div className="dshcm-ui dshcm-flex dshcm-h-full dshcm-min-h-0 dshcm-flex-col dshcm-gap-2 dshcm-overflow-y-auto dshcm-bg-transparent dshcm-px-[14px] dshcm-pb-[18px] dshcm-pt-3 dshcm-text-foreground">
-      <div className="dshcm-flex dshcm-items-center dshcm-gap-2">
-        <span className="dshcm-text-[11.5px] dshcm-font-semibold dshcm-uppercase dshcm-tracking-[0.07em] dshcm-text-foreground">
-          {t('title')}
-        </span>
-        <div className="dshcm-ml-auto dshcm-flex dshcm-items-center dshcm-gap-1">
+    <div className="dshcm-ui dshcm-flex dshcm-h-full dshcm-min-h-0 dshcm-flex-col dshcm-gap-3 dshcm-overflow-y-auto dshcm-bg-transparent dshcm-px-3.5 dshcm-pb-4 dshcm-pt-3 dshcm-text-foreground">
+      <header className="dshcm-flex dshcm-items-start dshcm-gap-2">
+        <div className="dshcm-min-w-0 dshcm-flex-1">
+          <h2 className="dshcm-text-[13px] dshcm-font-semibold dshcm-tracking-[-0.01em]">
+            {t('title')}
+          </h2>
+          {status?.isRepo ? (
+            <div className="dshcm-mt-1 dshcm-flex dshcm-min-w-0 dshcm-items-center dshcm-gap-1.5 dshcm-text-[11.5px]">
+              <GitBranch className="dshcm-size-3.5 dshcm-flex-none dshcm-text-muted-foreground" />
+              <span
+                className="dshcm-max-w-[45%] dshcm-truncate dshcm-font-medium dshcm-text-foreground"
+                title={branch}
+              >
+                {branch}
+              </span>
+              {status.upstream ? (
+                <>
+                  <span aria-hidden="true" className="dshcm-flex-none dshcm-text-muted-foreground">
+                    →
+                  </span>
+                  <span
+                    className="dshcm-min-w-0 dshcm-flex-1 dshcm-truncate dshcm-text-[11px] dshcm-text-muted-foreground"
+                    title={status.upstream}
+                  >
+                    {status.upstream}
+                  </span>
+                </>
+              ) : null}
+              {status.upstream && (status.ahead > 0 || status.behind > 0) ? (
+                <div className="dshcm-ml-auto dshcm-flex dshcm-flex-none dshcm-items-center dshcm-gap-1">
+                  {status.ahead > 0 ? (
+                    <span
+                      className="dshcm-flex dshcm-items-center dshcm-gap-0.5 dshcm-rounded dshcm-bg-secondary dshcm-px-1 dshcm-py-0.5 dshcm-text-[11px] dshcm-tabular-nums dshcm-text-foreground"
+                      title={fmt('aheadBy', { count: status.ahead })}
+                    >
+                      <ArrowUp className="dshcm-size-3" aria-hidden="true" />
+                      {status.ahead}
+                    </span>
+                  ) : null}
+                  {status.behind > 0 ? (
+                    <span
+                      className="dshcm-flex dshcm-items-center dshcm-gap-0.5 dshcm-rounded dshcm-bg-secondary dshcm-px-1 dshcm-py-0.5 dshcm-text-[11px] dshcm-tabular-nums dshcm-text-muted-foreground"
+                      title={fmt('behindBy', { count: status.behind })}
+                    >
+                      <ArrowDown className="dshcm-size-3" aria-hidden="true" />
+                      {status.behind}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+        <div className="dshcm-flex dshcm-flex-none dshcm-items-center dshcm-gap-1">
           <Button
             variant="ghost"
             size="icon"
@@ -124,7 +186,7 @@ export function SourceControlPanel({
             aria-label={githubLabel}
             title={githubLabel}
           >
-            <Github className="dshcm-h-3.5 dshcm-w-3.5" />
+            <Github className="dshcm-size-3.5" />
           </Button>
           <Button
             variant="ghost"
@@ -135,25 +197,28 @@ export function SourceControlPanel({
             title={t('refreshAria')}
           >
             <RefreshCw
-              className={cn(
-                'dshcm-h-3.5 dshcm-w-3.5',
-                busy === 'status' && 'dshcm-animate-spin',
-              )}
+              className={cn('dshcm-size-3.5', busy === 'status' && 'dshcm-animate-spin')}
             />
           </Button>
         </div>
-      </div>
+      </header>
 
       {feedback ? (
         <div
           role="status"
           aria-live="polite"
           className={cn(
-            'dshcm-flex dshcm-items-start dshcm-gap-2 dshcm-text-xs',
-            feedbackTone(feedback.kind),
+            'dshcm-flex dshcm-items-start dshcm-gap-2 dshcm-rounded-md dshcm-px-2.5 dshcm-py-2 dshcm-text-xs',
+            feedback.kind === 'error' && 'dshcm-bg-secondary',
           )}
         >
-          <span className="dshcm-min-w-0 dshcm-flex-1 dshcm-leading-relaxed">{feedback.text}</span>
+          <FeedbackIcon
+            className={cn('dshcm-mt-0.5 dshcm-size-3.5 dshcm-flex-none', feedbackTone(feedback.kind))}
+            aria-hidden="true"
+          />
+          <span className="dshcm-min-w-0 dshcm-flex-1 dshcm-leading-relaxed dshcm-text-foreground">
+            {feedback.text}
+          </span>
           {canRestart ? (
             <Button
               variant="outline"
@@ -161,7 +226,7 @@ export function SourceControlPanel({
               disabled={restarting}
               onClick={onRestart}
               title={t('restartTitle')}
-              className="dshcm-h-6 dshcm-px-2 dshcm-text-[11px]"
+              className="dshcm-h-7 dshcm-flex-none dshcm-px-2 dshcm-text-[11px]"
             >
               {restarting ? t('restarting') : t('restart')}
             </Button>
@@ -169,41 +234,59 @@ export function SourceControlPanel({
         </div>
       ) : null}
 
-      <div className="dshcm-relative">
+      {showStatusLine ? (
+        <div
+          role="status"
+          className="dshcm-px-0.5 dshcm-text-[11.5px] dshcm-leading-relaxed dshcm-text-muted-foreground"
+        >
+          {busy === 'status' ? t('checking') : summary}
+        </div>
+      ) : null}
+
+      <div className="dshcm-flex dshcm-flex-col dshcm-gap-1.5">
+        <div className="dshcm-flex dshcm-items-center dshcm-justify-between dshcm-gap-2">
+          <label
+            htmlFor={messageId}
+            className="dshcm-text-[11.5px] dshcm-font-medium dshcm-text-muted-foreground"
+          >
+            {t('messageLabel')}
+          </label>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!canGenerate}
+            onClick={onGenerate}
+            aria-label={busy === 'generate' ? t('generating') : t('generateAria')}
+            title={busy === 'generate' ? t('generating') : t('generateAria')}
+            className="dshcm-h-7 dshcm-gap-1 dshcm-px-1.5 dshcm-text-[11.5px]"
+          >
+            <Sparkles className="dshcm-size-3.5" />
+            {busy === 'generate' ? t('generating') : t('generate')}
+          </Button>
+        </div>
         <Textarea
-          className="dshcm-min-h-[96px] dshcm-resize-y dshcm-pr-10"
+          id={messageId}
+          className="dshcm-min-h-[88px] dshcm-resize-y"
           value={message}
-          rows={4}
+          rows={3}
           spellCheck
           placeholder={messagePlaceholder}
           disabled={Boolean(busy)}
           onChange={(event) => onChangeMessage(event.target.value)}
           onKeyDown={onMessageKeyDown}
-          aria-label={t('messageLabel')}
         />
-        <Button
-          variant="ghost"
-          size="icon"
-          className="dshcm-absolute dshcm-right-1.5 dshcm-top-1.5 dshcm-h-7 dshcm-w-7 dshcm-text-primary"
-          disabled={!canGenerate}
-          onClick={onGenerate}
-          aria-label={busy === 'generate' ? t('generating') : t('generateAria')}
-          title={busy === 'generate' ? t('generating') : t('generateAria')}
-        >
-          <Sparkles className="dshcm-h-3.5 dshcm-w-3.5" />
-        </Button>
       </div>
 
       <div className="dshcm-flex dshcm-items-center dshcm-gap-1.5">
         <Button
-          variant="outline"
+          variant="default"
           onClick={onCommit}
           disabled={!canCommit}
           aria-label={t('commitAria')}
           title={t('commitAria')}
-          className="dshcm-h-9 dshcm-flex-1 dshcm-border-primary dshcm-bg-secondary dshcm-text-primary hover:dshcm-bg-background hover:dshcm-text-primary"
+          className="dshcm-h-9 dshcm-flex-1 hover:dshcm-bg-primary hover:dshcm-text-primary-foreground active:dshcm-opacity-90 disabled:dshcm-bg-secondary disabled:dshcm-text-muted-foreground disabled:dshcm-opacity-100"
         >
-          <Check className="dshcm-h-3.5 dshcm-w-3.5" />
+          <Check className="dshcm-size-3.5" />
           {busy === 'commit' ? t('committing') : t('commit')}
         </Button>
         {showPush ? (
@@ -215,42 +298,36 @@ export function SourceControlPanel({
             title={t('pushAria')}
             className="dshcm-h-9 dshcm-shrink-0"
           >
-            <Upload className="dshcm-h-3.5 dshcm-w-3.5" />
+            <Upload className="dshcm-size-3.5" />
             {pushLabel(status, busy, fmt, t)}
           </Button>
         ) : null}
       </div>
 
-      <div
-        className="dshcm-min-h-4 dshcm-px-0.5 dshcm-text-[11.5px] dshcm-text-muted-foreground"
-        aria-live="polite"
-      >
-        {busy === 'status' ? t('checking') : summary}
-      </div>
-
       {status?.isRepo ? (
-        <div className="dshcm-border-t dshcm-border-border dshcm-pt-2">
+        <section aria-label={t('changes')} className="dshcm-border-t dshcm-border-border dshcm-pt-2.5">
           <button
             type="button"
             onClick={onToggleChanges}
             aria-expanded={changesOpen}
-            className="dshcm-flex dshcm-w-full dshcm-items-center dshcm-gap-1.5 dshcm-border-0 dshcm-bg-transparent dshcm-px-0.5 dshcm-pb-1 dshcm-text-left"
+            aria-controls={changesId}
+            className="dshcm-flex dshcm-w-full dshcm-items-center dshcm-gap-1.5 dshcm-rounded-md dshcm-border-0 dshcm-bg-transparent dshcm-px-1 dshcm-py-1 dshcm-text-left dshcm-transition-colors hover:dshcm-bg-secondary focus-visible:dshcm-outline-none focus-visible:dshcm-ring-2 focus-visible:dshcm-ring-ring"
           >
             {changesOpen ? (
-              <ChevronDown className="dshcm-h-3.5 dshcm-w-3.5 dshcm-flex-none dshcm-text-muted-foreground" />
+              <ChevronDown className="dshcm-size-3.5 dshcm-flex-none dshcm-text-muted-foreground" />
             ) : (
-              <ChevronRight className="dshcm-h-3.5 dshcm-w-3.5 dshcm-flex-none dshcm-text-muted-foreground" />
+              <ChevronRight className="dshcm-size-3.5 dshcm-flex-none dshcm-text-muted-foreground" />
             )}
             <span className="dshcm-text-xs dshcm-font-semibold dshcm-text-foreground">
               {t('changes')}
             </span>
-            <span className="dshcm-ml-auto dshcm-text-[11px] dshcm-text-muted-foreground">
+            <span className="dshcm-ml-auto dshcm-text-[11px] dshcm-tabular-nums dshcm-text-muted-foreground">
               {status.changedFiles}
             </span>
           </button>
           {changesOpen ? (
             status.files.length > 0 ? (
-              <ul className="dshcm-m-0 dshcm-list-none dshcm-p-0">
+              <ul id={changesId} className="dshcm-m-0 dshcm-mt-0.5 dshcm-list-none dshcm-p-0">
                 {status.files.map((file) => {
                   const parts = splitPath(file.workspacePath || file.path);
                   const letter = statusLetter(file);
@@ -260,7 +337,7 @@ export function SourceControlPanel({
                         type="button"
                         onClick={() => onOpenDiff(file)}
                         title={fmt('showChanges', { path: file.path })}
-                        className="dshcm-flex dshcm-w-full dshcm-items-center dshcm-gap-2 dshcm-rounded-md dshcm-border-0 dshcm-bg-transparent dshcm-px-1.5 dshcm-py-1.5 dshcm-text-left dshcm-transition-colors hover:dshcm-bg-secondary"
+                        className="dshcm-flex dshcm-min-h-[32px] dshcm-w-full dshcm-items-center dshcm-gap-2 dshcm-rounded-md dshcm-border-0 dshcm-bg-transparent dshcm-px-2 dshcm-py-1.5 dshcm-text-left dshcm-transition-colors hover:dshcm-bg-secondary focus-visible:dshcm-outline-none focus-visible:dshcm-ring-2 focus-visible:dshcm-ring-ring"
                       >
                         <span className="dshcm-flex dshcm-min-w-0 dshcm-flex-1 dshcm-items-baseline dshcm-gap-1.5">
                           <span className="dshcm-max-w-[62%] dshcm-truncate dshcm-text-[12.5px] dshcm-font-medium dshcm-text-foreground">
@@ -274,7 +351,7 @@ export function SourceControlPanel({
                         </span>
                         <span
                           className={cn(
-                            'dshcm-w-3.5 dshcm-shrink-0 dshcm-text-center dshcm-text-[11px] dshcm-font-semibold',
+                            'dshcm-flex dshcm-h-[18px] dshcm-min-w-[18px] dshcm-flex-none dshcm-items-center dshcm-justify-center dshcm-rounded dshcm-bg-secondary dshcm-px-1 dshcm-text-[11px] dshcm-font-semibold dshcm-tabular-nums',
                             statusTone(letter),
                           )}
                         >
@@ -286,49 +363,60 @@ export function SourceControlPanel({
                 })}
               </ul>
             ) : (
-              <div className="dshcm-px-1 dshcm-py-1 dshcm-text-xs dshcm-text-muted-foreground">
+              <div
+                id={changesId}
+                className="dshcm-mt-0.5 dshcm-rounded-md dshcm-border dshcm-border-dashed dshcm-border-border dshcm-px-2.5 dshcm-py-2 dshcm-text-[11.5px] dshcm-text-muted-foreground"
+              >
                 {t('noChanges')}
               </div>
             )
           ) : null}
-        </div>
+        </section>
       ) : null}
 
       {status?.isRepo && status.commits.length > 0 ? (
-        <div className="dshcm-border-t dshcm-border-border dshcm-pt-2">
+        <section aria-labelledby={commitsId} className="dshcm-border-t dshcm-border-border dshcm-pt-2.5">
           <div className="dshcm-flex dshcm-items-center dshcm-justify-between dshcm-gap-2 dshcm-px-0.5 dshcm-pb-1">
-            <span className="dshcm-text-[11px] dshcm-font-semibold dshcm-uppercase dshcm-tracking-[0.06em] dshcm-text-muted-foreground">
+            <h3 id={commitsId} className="dshcm-text-xs dshcm-font-semibold dshcm-text-foreground">
               {t('unpushedCommits')}
-            </span>
-            {status.upstream ? (
-              <span className="dshcm-max-w-[220px] dshcm-truncate dshcm-font-mono dshcm-text-[11px] dshcm-text-muted-foreground">
-                {status.upstream}
-              </span>
-            ) : null}
+            </h3>
           </div>
           <ul
             className="dshcm-m-0 dshcm-max-h-[220px] dshcm-list-none dshcm-overflow-auto dshcm-p-0"
             aria-label={t('unpushedCommits')}
           >
-            {status.commits.map((commit) => (
-              <li
-                key={commit.hash}
-                title={commit.subject}
-                className="dshcm-flex dshcm-items-baseline dshcm-gap-2 dshcm-border-t dshcm-border-border dshcm-py-1 first:dshcm-border-t-0"
-              >
-                <code className="dshcm-shrink-0 dshcm-font-mono dshcm-text-[11px] dshcm-text-primary">
-                  {commit.shortHash || commit.hash.slice(0, 7)}
-                </code>
-                <span className="dshcm-min-w-0 dshcm-flex-1 dshcm-truncate dshcm-text-[12.5px] dshcm-text-foreground">
-                  {commit.subject}
-                </span>
-                <span className="dshcm-max-w-[170px] dshcm-shrink-0 dshcm-truncate dshcm-text-[11px] dshcm-text-muted-foreground">
-                  {[commit.author, commitDate(commit.timestamp)].filter(Boolean).join(' · ')}
-                </span>
-              </li>
-            ))}
+            {status.commits.map((commit) => {
+              const date = commitDate(commit.timestamp);
+              return (
+                <li
+                  key={commit.hash}
+                  className="dshcm-flex dshcm-items-start dshcm-gap-2 dshcm-border-t dshcm-border-border dshcm-py-2 first:dshcm-border-t-0"
+                >
+                  <code className="dshcm-mt-0.5 dshcm-shrink-0 dshcm-font-mono dshcm-text-[11px] dshcm-tabular-nums dshcm-text-muted-foreground">
+                    {commit.shortHash || commit.hash.slice(0, 7)}
+                  </code>
+                  <div className="dshcm-min-w-0 dshcm-flex-1">
+                    <div
+                      className="dshcm-truncate dshcm-text-[12.5px] dshcm-text-foreground"
+                      title={commit.subject}
+                    >
+                      {commit.subject}
+                    </div>
+                    <div className="dshcm-mt-0.5 dshcm-flex dshcm-items-center dshcm-gap-1 dshcm-text-[11px] dshcm-text-muted-foreground">
+                      <span className="dshcm-truncate">{commit.author}</span>
+                      {date ? (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span className="dshcm-shrink-0">{date}</span>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
-        </div>
+        </section>
       ) : null}
 
       <GitHubDialog

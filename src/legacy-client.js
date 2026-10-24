@@ -107,8 +107,8 @@ const h = React.createElement;
       githubFailed: 'Could not create the repository.',
       githubAuthHint: 'Creating a repository uses the GitHub CLI. Install `gh` and run `gh auth login` first.',
       unpushedCommits: 'Unpushed commits',
-      pushedOne: 'Pushed 1 commit to {upstream}.',
-      pushedMany: 'Pushed {count} commits to {upstream}.',
+      aheadBy: '{count} ahead',
+      behindBy: '{count} behind',
       placeholder: 'Generate a message, or write one yourself. Committing stages and commits all current changes.',
       checking: 'Checking the working tree…',
       notRepo: 'This session is not in a Git repository.',
@@ -195,8 +195,8 @@ const h = React.createElement;
       githubFailed: '无法创建仓库。',
       githubAuthHint: '创建仓库需要使用 GitHub CLI。请先安装 `gh` 并运行 `gh auth login`。',
       unpushedCommits: '未推送的提交',
-      pushedOne: '已将 1 个提交推送到 {upstream}。',
-      pushedMany: '已将 {count} 个提交推送到 {upstream}。',
+      aheadBy: '领先 {count} 个提交',
+      behindBy: '落后 {count} 个提交',
       placeholder: '生成一条提交信息，或自己填写。提交时会暂存并提交所有当前更改。',
       checking: '正在检查工作区…',
       notRepo: '当前会话不在 Git 仓库中。',
@@ -776,15 +776,6 @@ const h = React.createElement;
         try {
           const data = await request('push', {});
           setStatus(readStatus(data));
-          const count = Number(data.pushed) || 1;
-          const upstream = data.upstream || 'upstream';
-          setFeedback({
-            kind: 'success',
-            text: format(translate, count === 1 ? 'pushedOne' : 'pushedMany', {
-              count,
-              upstream,
-            }),
-          });
         } catch (error) {
           setFeedback({ kind: 'error', text: error instanceof Error ? error.message : String(error) });
         } finally {
