@@ -2,13 +2,14 @@
 
 A DeepSeek Harness plugin for reviewing, generating, committing, and pushing Git changes from the composer.
 
-The panel sits above the session composer and works on that session's current working directory.
+The Git button beside the chat submit button toggles the session's right sidebar: it opens or focuses the source-control panel, and closes the sidebar again when that panel is the active tab. The panel works on the session's current working directory.
 
 ## Features
 
 - **Generate** a Conventional Commits message from the current diff using the session's configured model.
 - Edit the generated message before committing.
 - **Commit changes** stages all current changes (`git add -A`) and commits them.
+- **Changes** lists every modified, added, and untracked file; click a file to open it in the sidebar's document preview.
 - Shows **only unpushed commits**, with short hash, subject, author, and date.
 - **Push commits** appears when the local branch is ahead of its upstream, and pushes with `git push`.
 - Git hooks are respected; the plugin never uses `--no-verify`.
@@ -38,9 +39,10 @@ No plugin configuration is required.
 ## Usage
 
 1. Open a session whose working directory is a Git repository.
-2. Use **Generate** to create a message, or write one yourself.
-3. Review the message, then use **Commit changes**.
-4. If the branch is ahead of its upstream, use **Push commits**.
+2. Click the Git button beside the chat submit button; the source-control panel opens in the right sidebar. Click it again while the panel is active to close the sidebar.
+3. Use **Generate** to create a message, or write one yourself.
+4. Review the message, then use **Commit changes**.
+5. If the branch is ahead of its upstream, use **Push commits**.
 
 `Cmd+Enter` / `Ctrl+Enter` in the message field commits.
 

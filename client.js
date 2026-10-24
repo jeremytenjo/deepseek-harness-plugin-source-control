@@ -5,14 +5,22 @@ window.__ModuleLoader__.load({
     const h = React.createElement;
     const NS = 'dshCommitMessage';
     const ROUTE = '/__dsh/commit-message';
+    const KIND = 'source-control';
+    const TAB_ID = '@local/dsh-commit-message';
 
     const EN = {
-      title: 'Commit message',
+      title: 'Source control',
+      messageLabel: 'Commit message',
+      messagePlaceholder: 'Message ({key} to commit on "{branch}")',
+      changes: 'Changes',
+      openFile: 'Open {path}',
+      openFileFailed: 'Could not open {path}.',
+      showPanel: 'Toggle source control panel',
       generate: 'Generate',
       generating: 'Generating…',
       refresh: 'Refresh changes',
       refreshAria: 'Refresh the Git working tree status',
-      commit: 'Commit changes',
+      commit: 'Commit',
       committing: 'Committing…',
       pushOne: 'Push 1 commit',
       pushMany: 'Push {count} commits',
@@ -29,24 +37,27 @@ window.__ModuleLoader__.load({
       files: '{count} changed files',
       generated: 'Message generated. Review it, then commit.',
       committed: 'Committed {hash}.',
-      collapse: 'Collapse commit message panel',
-      expand: 'Expand commit message panel',
       generateAria: 'Generate a commit message from the current changes',
       commitAria: 'Commit all current changes with this message',
       detached: 'detached HEAD',
       requestFailed: 'The commit message request failed.',
       networkFailed: 'Could not reach the Harness host.',
       unreadable: 'The commit message endpoint returned an unreadable response.',
-      shortcut: '⌘↵ or Ctrl↵ to commit',
     };
 
     const ZH = {
-      title: '提交信息',
+      title: '源代码管理',
+      messageLabel: '提交信息',
+      messagePlaceholder: '提交信息（{key} 在“{branch}”上提交）',
+      changes: '更改',
+      openFile: '打开 {path}',
+      openFileFailed: '无法打开 {path}。',
+      showPanel: '切换源代码管理面板',
       generate: '生成',
       generating: '正在生成…',
       refresh: '刷新更改',
       refreshAria: '刷新 Git 工作区状态',
-      commit: '提交更改',
+      commit: '提交',
       committing: '正在提交…',
       pushOne: '推送 1 个提交',
       pushMany: '推送 {count} 个提交',
@@ -63,15 +74,12 @@ window.__ModuleLoader__.load({
       files: '{count} 个文件已更改',
       generated: '提交信息已生成，请检查后提交。',
       committed: '已提交 {hash}。',
-      collapse: '收起提交信息面板',
-      expand: '展开提交信息面板',
       generateAria: '根据当前更改生成提交信息',
       commitAria: '使用这条信息提交所有当前更改',
       detached: '游离 HEAD',
       requestFailed: '提交信息请求失败。',
       networkFailed: '无法连接到 Harness 主机。',
       unreadable: '提交信息接口返回了无法解析的响应。',
-      shortcut: '⌘↵ 或 Ctrl↵ 提交',
     };
 
     function useTranslate(ctx) {
@@ -114,6 +122,19 @@ window.__ModuleLoader__.load({
             }))
             .filter((commit) => commit.hash)
         : [];
+      const files = Array.isArray(data.files)
+        ? data.files
+            .slice(0, 500)
+            .map((file) => ({
+              path: typeof file?.path === 'string' ? file.path : '',
+              workspacePath: typeof file?.workspacePath === 'string' ? file.workspacePath : null,
+              status: typeof file?.status === 'string' ? file.status : '',
+              untracked: Boolean(file?.untracked),
+              staged: Boolean(file?.staged),
+              unstaged: Boolean(file?.unstaged),
+            }))
+            .filter((file) => file.path)
+        : [];
       return {
         isRepo: Boolean(data.isRepo),
         cwd: typeof data.cwd === 'string' ? data.cwd : '',
@@ -124,11 +145,38 @@ window.__ModuleLoader__.load({
         behind: Number(data.behind) || 0,
         hasCommits: Boolean(data.hasCommits),
         commits,
+        files,
         changedFiles: Number(data.changedFiles) || 0,
         stagedFiles: Number(data.stagedFiles) || 0,
         unstagedFiles: Number(data.unstagedFiles) || 0,
         untrackedFiles: Number(data.untrackedFiles) || 0,
       };
+    }
+
+    function fileAddress(sessionId, path) {
+      const normalized = path.replace(/\\/g, '/').replace(/^(?:\.\/)+/, '');
+      const encoded = normalized
+        .split('/')
+        .map((segment) => encodeURIComponent(segment).replace(/%3A/gi, ':'))
+        .join('/');
+      const session = encodeURIComponent(sessionId).replace(/%3A/gi, ':');
+      return `dsh-resource://file/session/${session}/${encoded}`;
+    }
+
+    function splitFilePath(path) {
+      const normalized = path.replace(/\\/g, '/');
+      const cut = normalized.lastIndexOf('/');
+      if (cut === -1) return { name: normalized, directory: '' };
+      return { name: normalized.slice(cut + 1), directory: normalized.slice(0, cut) };
+    }
+
+    function statusLetter(file) {
+      if (file.untracked) return 'U';
+      if (file.status.includes('D')) return 'D';
+      if (file.status.includes('R')) return 'R';
+      if (file.status.includes('C')) return 'C';
+      if (file.status.includes('A')) return 'A';
+      return 'M';
     }
 
     function commitDate(timestamp) {
@@ -234,7 +282,7 @@ window.__ModuleLoader__.load({
       );
     }
 
-    function ChevronIcon(props) {
+    function CheckIcon() {
       return h(
         'svg',
         {
@@ -243,28 +291,86 @@ window.__ModuleLoader__.load({
           viewBox: '0 0 16 16',
           fill: 'none',
           stroke: 'currentColor',
-          strokeWidth: 1.6,
+          strokeWidth: 1.8,
           strokeLinecap: 'round',
           strokeLinejoin: 'round',
           'aria-hidden': true,
           focusable: false,
-          style: { transform: props.open ? 'rotate(180deg)' : 'none', transition: 'transform 120ms ease' },
         },
-        h('path', { d: 'M4 6l4 4 4-4' }),
+        h('path', { d: 'M3 8.5l3.2 3.2L13 5' }),
+      );
+    }
+
+    function DisclosureIcon(props) {
+      return h(
+        'svg',
+        {
+          width: 12,
+          height: 12,
+          viewBox: '0 0 16 16',
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.7,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          'aria-hidden': true,
+          focusable: false,
+          style: { transform: props.open ? 'rotate(90deg)' : 'none', transition: 'transform 120ms ease' },
+        },
+        h('path', { d: 'M6 4l4 4-4 4' }),
+      );
+    }
+
+    function CommitTrigger(props) {
+      const translate = useTranslate(props.clientCtx);
+      function openPanel() {
+        try {
+          const sidebar = props.clientCtx.sidebarRight;
+          const active = sidebar.active();
+          if (sidebar.isExpanded() && active?.kind === KIND) {
+            sidebar.toggleExpanded();
+            return;
+          }
+          sidebar.openTab(KIND);
+        } catch (error) {
+          console.error('commit-message: could not toggle the right sidebar', error);
+        }
+      }
+      return h(
+        'button',
+        {
+          type: 'button',
+          className: 'dshcm-trigger',
+          onClick: openPanel,
+          'aria-label': translate('showPanel'),
+          title: translate('showPanel'),
+        },
+        h(GitIcon),
+      );
+    }
+
+    function CommitTabTitle(props) {
+      const translate = useTranslate(props.clientCtx);
+      return h(
+        'span',
+        { className: 'dshcm-tabTitle' },
+        h(GitIcon),
+        h('span', null, translate('title')),
       );
     }
 
     function CommitDock(props) {
       const sessionId = props.sessionId;
       const translate = useTranslate(props.clientCtx);
-      const [open, setOpen] = React.useState(true);
       const [status, setStatus] = React.useState(null);
       const [message, setMessage] = React.useState('');
       const [busy, setBusy] = React.useState('status');
       const [feedback, setFeedback] = React.useState(null);
+      const [changesOpen, setChangesOpen] = React.useState(true);
       const active = React.useRef(null);
       const focusController = React.useRef(null);
       const busyRef = React.useRef('status');
+      const lastSession = React.useRef(sessionId);
 
       React.useEffect(() => {
         busyRef.current = busy;
@@ -299,11 +405,15 @@ window.__ModuleLoader__.load({
       );
 
       React.useEffect(() => {
+        const changedSession = lastSession.current !== sessionId;
+        lastSession.current = sessionId;
         let alive = true;
         const controller = new AbortController();
-        setStatus(null);
-        setMessage('');
-        setFeedback(null);
+        if (changedSession) {
+          setStatus(null);
+          setMessage('');
+          setFeedback(null);
+        }
         setBusy('status');
         request('status', {}, controller.signal)
           .then((data) => {
@@ -364,6 +474,16 @@ window.__ModuleLoader__.load({
         }
       }
 
+      function openFile(file) {
+        if (!file.workspacePath || file.status.includes('D')) return;
+        try {
+          props.clientCtx.sidebarRight.openResource(fileAddress(sessionId, file.workspacePath));
+        } catch (error) {
+          console.error('commit-message: could not open file', error);
+          setFeedback({ kind: 'error', text: format(translate, 'openFileFailed', { path: file.path }) });
+        }
+      }
+
       const canGenerate = Boolean(status && status.isRepo && status.changedFiles > 0) && !busy;
       const canCommit = canGenerate && message.trim().length > 0;
       const canPush = Boolean(status && status.hasCommits && status.ahead > 0) && !busy;
@@ -378,7 +498,6 @@ window.__ModuleLoader__.load({
           const data = await request('generate', {}, controller.signal);
           setMessage(String(data.message || ''));
           setStatus(readStatus(data));
-          setOpen(true);
           setFeedback({ kind: 'success', text: translate('generated') });
         } catch (error) {
           if (error && error.name === 'AbortError') return;
@@ -438,9 +557,81 @@ window.__ModuleLoader__.load({
         }
       }
 
-      const branchLabel = status && status.isRepo ? status.branch || translate('detached') : '';
       const summary = statusText(translate, status);
+      const commitKey =
+        typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
+          ? '⌘Enter'
+          : 'Ctrl+Enter';
+      const messagePlaceholder =
+        status && status.isRepo
+          ? format(translate, 'messagePlaceholder', {
+              key: commitKey,
+              branch: status.branch || translate('detached'),
+            })
+          : translate('placeholder');
       const showPush = Boolean(status && status.isRepo && status.hasCommits && status.ahead > 0);
+      const changesSection = status && status.isRepo
+        ? h(
+            'div',
+            { className: 'dshcm-changes' },
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'dshcm-sectionToggle',
+                onClick: () => setChangesOpen((value) => !value),
+                'aria-expanded': changesOpen,
+              },
+              h(DisclosureIcon, { open: changesOpen }),
+              h('span', { className: 'dshcm-sectionTitle' }, translate('changes')),
+              h('span', { className: 'dshcm-sectionCount' }, String(status.changedFiles)),
+            ),
+            changesOpen
+              ? status.files.length > 0
+                ? h(
+                    'ul',
+                    { className: 'dshcm-fileList' },
+                    status.files.map((file) => {
+                      const parts = splitFilePath(file.workspacePath || file.path);
+                      const letter = statusLetter(file);
+                      const tone =
+                        letter === 'D' ? 'deleted' : letter === 'U' || letter === 'A' ? 'new' : 'modified';
+                      const openable = Boolean(file.workspacePath) && !file.status.includes('D');
+                      return h(
+                        'li',
+                        { key: file.path },
+                        h(
+                          'button',
+                          {
+                            type: 'button',
+                            className: 'dshcm-fileRow',
+                            disabled: !openable,
+                            onClick: () => openFile(file),
+                            title: openable
+                              ? format(translate, 'openFile', { path: file.path })
+                              : file.path,
+                          },
+                          h(
+                            'span',
+                            { className: 'dshcm-fileText' },
+                            h('span', { className: 'dshcm-fileName' }, parts.name),
+                            parts.directory
+                              ? h('span', { className: 'dshcm-fileDir' }, parts.directory)
+                              : null,
+                          ),
+                          h(
+                            'span',
+                            { className: `dshcm-fileStatus dshcm-fileStatus--${tone}` },
+                            letter,
+                          ),
+                        ),
+                      );
+                    }),
+                  )
+                : h('div', { className: 'dshcm-empty' }, translate('noChanges'))
+              : null,
+          )
+        : null;
       const commitsSection = status && status.isRepo && status.commits.length > 0
         ? h(
             'div',
@@ -479,27 +670,11 @@ window.__ModuleLoader__.load({
         h('style', null, CSS),
         h(
           'div',
-          { className: 'dshcm-root', 'data-session': sessionId },
+          { className: 'dshcm-root', id: `dshcm-panel-${sessionId}`, 'data-session': sessionId },
           h(
             'div',
             { className: 'dshcm-header' },
-            h(
-              'div',
-              { className: 'dshcm-heading' },
-              h('span', { className: 'dshcm-mark', 'aria-hidden': true }, h(GitIcon)),
-              h('span', { className: 'dshcm-title' }, translate('title')),
-              branchLabel
-                ? h(
-                    'span',
-                    { className: 'dshcm-branch', title: status.top || status.cwd },
-                    h('span', { className: 'dshcm-branchDot', 'aria-hidden': true }),
-                    branchLabel,
-                  )
-                : null,
-              status && status.isRepo && status.changedFiles > 0
-                ? h('span', { className: 'dshcm-count' }, summary)
-                : null,
-            ),
+            h('span', { className: 'dshcm-title' }, translate('title')),
             h(
               'div',
               { className: 'dshcm-headerActions' },
@@ -515,31 +690,6 @@ window.__ModuleLoader__.load({
                 },
                 h(RefreshIcon),
               ),
-              h(
-                'button',
-                {
-                  type: 'button',
-                  className: 'dshcm-button dshcm-generate',
-                  disabled: !canGenerate,
-                  onClick: generate,
-                  'aria-label': translate('generateAria'),
-                  title: translate('generateAria'),
-                },
-                h(SparkIcon),
-                h('span', null, busy === 'generate' ? translate('generating') : translate('generate')),
-              ),
-              h(
-                'button',
-                {
-                  type: 'button',
-                  className: 'dshcm-iconButton',
-                  onClick: () => setOpen((value) => !value),
-                  'aria-expanded': open,
-                  'aria-label': open ? translate('collapse') : translate('expand'),
-                  title: open ? translate('collapse') : translate('expand'),
-                },
-                h(ChevronIcon, { open }),
-              ),
             ),
           ),
           feedback
@@ -553,141 +703,139 @@ window.__ModuleLoader__.load({
                 feedback.text,
               )
             : null,
-          open
-            ? h(
-                'div',
-                { className: 'dshcm-body' },
-                h('textarea', {
-                  className: 'dshcm-input',
-                  value: message,
-                  rows: 3,
-                  spellCheck: true,
-                  placeholder: translate('placeholder'),
-                  disabled: Boolean(busy),
-                  onChange: (event) => setMessage(event.target.value),
-                  onKeyDown: onMessageKeyDown,
-                  'aria-label': translate('title'),
-                }),
-                commitsSection,
-                h(
-                  'div',
-                  { className: 'dshcm-footer' },
-                  h(
-                    'span',
-                    { className: 'dshcm-status', 'aria-live': 'polite' },
-                    busy === 'status' ? translate('checking') : summary,
-                    status && status.isRepo && status.changedFiles > 0
-                      ? h('span', { className: 'dshcm-shortcut' }, translate('shortcut'))
-                      : null,
-                  ),
-                  h(
-                    'div',
-                    { className: 'dshcm-footerActions' },
-                    showPush
-                      ? h(
-                          'button',
-                          {
-                            type: 'button',
-                            className: 'dshcm-button dshcm-push',
-                            disabled: !canPush,
-                            onClick: pushCommits,
-                            'aria-label': translate('pushAria'),
-                            title: translate('pushAria'),
-                          },
-                          h(PushIcon),
-                          busy === 'push'
-                            ? translate('pushing')
-                            : format(translate, status.ahead === 1 ? 'pushOne' : 'pushMany', {
-                                count: status.ahead,
-                              }),
-                        )
-                      : null,
-                    h(
-                      'button',
-                      {
-                        type: 'button',
-                        className: 'dshcm-button dshcm-commit',
-                        disabled: !canCommit,
-                        onClick: commit,
-                        'aria-label': translate('commitAria'),
-                        title: translate('commitAria'),
-                      },
-                      busy === 'commit' ? translate('committing') : translate('commit'),
-                    ),
-                  ),
-                ),
-              )
-            : null,
+          h(
+            'div',
+            { className: 'dshcm-body' },
+            h(
+              'div',
+              { className: 'dshcm-message' },
+              h('textarea', {
+                className: 'dshcm-input',
+                value: message,
+                rows: 4,
+                spellCheck: true,
+                placeholder: messagePlaceholder,
+                disabled: Boolean(busy),
+                onChange: (event) => setMessage(event.target.value),
+                onKeyDown: onMessageKeyDown,
+                'aria-label': translate('messageLabel'),
+              }),
+              h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'dshcm-inlineGenerate',
+                  disabled: !canGenerate,
+                  onClick: generate,
+                  'aria-label': busy === 'generate' ? translate('generating') : translate('generateAria'),
+                  title: busy === 'generate' ? translate('generating') : translate('generateAria'),
+                },
+                h(SparkIcon),
+              ),
+            ),
+            h(
+              'div',
+              { className: 'dshcm-actions' },
+              showPush
+                ? h(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'dshcm-button dshcm-push',
+                      disabled: !canPush,
+                      onClick: pushCommits,
+                      'aria-label': translate('pushAria'),
+                      title: translate('pushAria'),
+                    },
+                    h(PushIcon),
+                    busy === 'push'
+                      ? translate('pushing')
+                      : format(translate, status.ahead === 1 ? 'pushOne' : 'pushMany', {
+                          count: status.ahead,
+                        }),
+                  )
+                : null,
+              h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'dshcm-button dshcm-commit',
+                  disabled: !canCommit,
+                  onClick: commit,
+                  'aria-label': translate('commitAria'),
+                  title: translate('commitAria'),
+                },
+                h(CheckIcon),
+                busy === 'commit' ? translate('committing') : translate('commit'),
+              ),
+            ),
+            h(
+              'div',
+              { className: 'dshcm-statusLine', 'aria-live': 'polite' },
+              busy === 'status' ? translate('checking') : summary,
+            ),
+            changesSection,
+            commitsSection,
+          ),
         ),
       );
     }
 
     const CSS = `
+.dshcm-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0 1px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  transition: background 100ms ease, color 100ms ease, border-color 100ms ease;
+}
+.dshcm-trigger:hover {
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+}
+.dshcm-trigger:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 1px;
+}
+.dshcm-tabTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
 .dshcm-root {
   box-sizing: border-box;
   width: 100%;
-  margin: 0 0 8px;
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 10px;
-  background: var(--dsw-alias-bg-layer-1);
+  height: 100%;
+  min-height: 0;
+  padding: 12px 14px 18px;
+  overflow: auto;
+  background: transparent;
   color: var(--dsw-alias-label-primary);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.45;
-  overflow: hidden;
 }
 .dshcm-header {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 7px 9px;
-}
-.dshcm-heading {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  flex: 1 1 180px;
-}
-.dshcm-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  flex: 0 0 auto;
-  border-radius: 7px;
-  background: var(--dsw-alias-bg-layer-2);
-  color: var(--dsw-alias-brand-primary);
+  padding: 0 0 8px;
 }
 .dshcm-title {
-  font-weight: 600;
+  font-weight: 650;
   color: var(--dsw-alias-label-primary);
-  white-space: nowrap;
-}
-.dshcm-branch {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-  max-width: 180px;
-  padding: 1px 7px;
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 999px;
-  color: var(--dsw-alias-label-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.dshcm-branchDot {
-  width: 6px;
-  height: 6px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--dsw-alias-state-success-primary);
-}
-.dshcm-count {
-  color: var(--dsw-alias-label-secondary);
+  font-size: 11.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 .dshcm-headerActions {
@@ -726,11 +874,9 @@ window.__ModuleLoader__.load({
   opacity: 0.48;
   cursor: default;
 }
-.dshcm-generate {
-  color: var(--dsw-alias-brand-primary);
-  border-color: var(--dsw-alias-border-l2);
-}
 .dshcm-commit {
+  flex: 1 1 160px;
+  min-height: 32px;
   background: var(--dsw-alias-bg-layer-2);
   border-color: var(--dsw-alias-brand-primary);
   color: var(--dsw-alias-brand-primary);
@@ -739,6 +885,11 @@ window.__ModuleLoader__.load({
   background: var(--dsw-alias-bg-layer-1);
   border-color: var(--dsw-alias-brand-primary);
   color: var(--dsw-alias-brand-primary);
+}
+.dshcm-push {
+  flex: 0 0 auto;
+  min-height: 32px;
+  color: var(--dsw-alias-label-primary);
 }
 .dshcm-iconButton {
   display: inline-flex;
@@ -764,16 +915,19 @@ window.__ModuleLoader__.load({
 .dshcm-body {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 0 9px 9px;
+  gap: 9px;
+  padding: 0;
+}
+.dshcm-message {
+  position: relative;
 }
 .dshcm-input {
   box-sizing: border-box;
   width: 100%;
-  min-height: 62px;
-  max-height: 180px;
+  min-height: 96px;
+  max-height: 260px;
   resize: vertical;
-  padding: 7px 9px;
+  padding: 9px 42px 9px 10px;
   border: 1px solid var(--dsw-alias-border-l1);
   border-radius: 8px;
   background: var(--dsw-alias-bg-base);
@@ -785,21 +939,159 @@ window.__ModuleLoader__.load({
   color: var(--dsw-alias-label-secondary);
   opacity: 0.85;
 }
-.dshcm-footer {
-  display: flex;
+.dshcm-inlineGenerate {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-brand-primary);
+  cursor: pointer;
 }
-.dshcm-footerActions {
+.dshcm-inlineGenerate:hover:not(:disabled) {
+  background: var(--dsw-alias-bg-layer-2);
+}
+.dshcm-inlineGenerate:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 1px;
+}
+.dshcm-inlineGenerate:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+.dshcm-actions {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-left: auto;
   flex-wrap: wrap;
 }
-.dshcm-push {
+.dshcm-statusLine {
+  min-height: 16px;
+  padding: 0 2px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11.5px;
+}
+.dshcm-changes {
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  padding-top: 7px;
+}
+.dshcm-sectionToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 0 2px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dshcm-sectionToggle:hover {
   color: var(--dsw-alias-label-primary);
+}
+.dshcm-sectionToggle:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 1px;
+}
+.dshcm-sectionTitle {
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.dshcm-sectionCount {
+  margin-left: auto;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11.5px;
+}
+.dshcm-fileList {
+  max-height: 280px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+.dshcm-fileRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dshcm-fileRow:hover:not(:disabled) {
+  background: var(--dsw-alias-bg-layer-2);
+}
+.dshcm-fileRow:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: -1px;
+}
+.dshcm-fileRow:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.dshcm-fileText {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.dshcm-fileName {
+  flex: 0 1 auto;
+  max-width: 62%;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12.5px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dshcm-fileDir {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dshcm-fileStatus {
+  flex: 0 0 14px;
+  width: 14px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  font-weight: 650;
+  text-align: center;
+}
+.dshcm-fileStatus--new {
+  color: var(--dsw-alias-state-success-primary);
+}
+.dshcm-fileStatus--modified {
+  color: var(--dsw-alias-brand-primary);
+}
+.dshcm-fileStatus--deleted {
+  color: var(--dsw-alias-state-error-primary);
+}
+.dshcm-empty {
+  padding: 4px 2px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
 }
 .dshcm-commits {
   border-top: 1px solid var(--dsw-alias-border-l1);
@@ -829,7 +1121,7 @@ window.__ModuleLoader__.load({
   white-space: nowrap;
 }
 .dshcm-commitList {
-  max-height: 136px;
+  max-height: 220px;
   margin: 0;
   padding: 0;
   overflow: auto;
@@ -868,20 +1160,8 @@ window.__ModuleLoader__.load({
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.dshcm-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  color: var(--dsw-alias-label-secondary);
-  flex: 1 1 180px;
-}
-.dshcm-shortcut {
-  color: var(--dsw-alias-state-idle-primary);
-  white-space: nowrap;
-}
 .dshcm-feedback {
-  padding: 0 9px 7px;
+  padding: 0 0 8px;
   font-size: 12px;
 }
 .dshcm-feedback--error {
@@ -896,25 +1176,58 @@ window.__ModuleLoader__.load({
 `;
 
     return {
-      inject: ['slots', 'locale'],
+      inject: ['slots', 'locale', 'sidebarRightTabs', 'sidebarRight'],
       apply(ctx) {
+        const t = ctx.locale.bind(NS);
         const Dock = (props) => h(CommitDock, { ...props, clientCtx: ctx });
+        const Trigger = (props) => h(CommitTrigger, { ...props, clientCtx: ctx });
+        const Title = (props) => h(CommitTabTitle, { ...props, clientCtx: ctx });
         ctx.effect(() => ctx.locale.register(NS, 'en', EN), 'commit-message: en locale');
         ctx.effect(() => ctx.locale.register(NS, 'zh', ZH), 'commit-message: zh locale');
         ctx.effect(
           () =>
-            ctx.slots.inject('conversation.input.dock', () =>
+            ctx.sidebarRightTabs.register({
+              id: TAB_ID,
+              kind: KIND,
+              keepMounted: true,
+              title: () => t('title'),
+            }),
+          'commit-message: sidebar tab type',
+        );
+        ctx.effect(
+          () =>
+            ctx.slots.inject('sidebar.right.pane.tab', () =>
               ctx.slots.register(
-                {
-                  name: 'conversation.input.dock',
-                  id: 'commit-message',
-                  order: 30,
-                  label: () => ctx.locale.bind(NS)('title'),
-                },
+                { name: 'sidebar.right.pane.tab', key: TAB_ID, locale: NS },
                 Dock,
               ),
             ),
-          'commit-message: composer dock',
+          'commit-message: sidebar tab body',
+        );
+        ctx.effect(
+          () =>
+            ctx.slots.inject('sidebar.right.pane.tab.title', () =>
+              ctx.slots.register(
+                { name: 'sidebar.right.pane.tab.title', key: TAB_ID, locale: NS },
+                Title,
+              ),
+            ),
+          'commit-message: sidebar tab title',
+        );
+        ctx.effect(
+          () =>
+            ctx.slots.inject('conversation.input.right', () =>
+              ctx.slots.register(
+                {
+                  name: 'conversation.input.right',
+                  id: 'commit-message-trigger',
+                  order: 10,
+                  label: () => t('title'),
+                },
+                Trigger,
+              ),
+            ),
+          'commit-message: composer trigger',
         );
       },
     };

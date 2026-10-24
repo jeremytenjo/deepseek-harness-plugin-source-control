@@ -202,17 +202,22 @@ async function inspectRepo(ctx, cwd, signal) {
   }
 
   const top = topResult.stdout.trim() || cwd;
-  const [statusResult, branchInfoResult, headResult] = await Promise.all([
+  const [statusResult, branchInfoResult, headResult, prefixResult] = await Promise.all([
     runGit(ctx, cwd, ['status', '--porcelain=v1', '-z', '--untracked-files=all'], signal),
     runGit(ctx, cwd, ['status', '--porcelain=v2', '--branch', '--untracked-files=no'], signal),
     runGit(ctx, cwd, ['rev-parse', '--verify', 'HEAD'], signal),
+    runGit(ctx, cwd, ['rev-parse', '--show-prefix'], signal),
   ]);
 
   if (statusResult.code !== 0) {
     throw new RequestError(409, friendlyGitError(statusResult, 'Could not read Git status.'));
   }
 
-  const files = parseStatus(statusResult.stdout);
+  const prefix = prefixResult.code === 0 ? prefixResult.stdout.trim() : '';
+  const files = parseStatus(statusResult.stdout).map((file) => ({
+    ...file,
+    workspacePath: workspaceRelativePath(file.path, prefix),
+  }));
   const branchInfo = parseBranchInfo(branchInfoResult.stdout);
   const hasCommits = headResult.code === 0;
 
@@ -287,6 +292,11 @@ function parseCommits(raw) {
     })
     .filter((commit) => commit.hash)
     .slice(0, 8);
+}
+
+function workspaceRelativePath(repoPath, prefix) {
+  if (!prefix) return repoPath;
+  return repoPath.startsWith(prefix) ? repoPath.slice(prefix.length) : null;
 }
 
 function parseStatus(raw) {
@@ -519,6 +529,14 @@ function publicStatus(status) {
     behind: status.behind,
     hasCommits: status.hasCommits,
     commits: status.commits,
+    files: status.files.slice(0, 500).map((file) => ({
+      path: file.path,
+      workspacePath: file.workspacePath,
+      status: file.status,
+      untracked: file.untracked,
+      staged: file.staged,
+      unstaged: file.unstaged,
+    })),
     changedFiles: status.changedFiles,
     stagedFiles: status.stagedFiles,
     unstagedFiles: status.unstagedFiles,
