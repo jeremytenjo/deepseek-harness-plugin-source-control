@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Generate a commit message from the current Git changes, commit them, and push unpushed commits from the composer.",
+  "description": "Source control for DeepSeek Harness: T3-style diffs, commit messages, GitHub repository creation, commit and push.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jeremytenjo/deepseek-harness-plugin-source-control.git"
@@ -21,6 +21,7 @@
   "files": [
     "index.js",
     "client.js",
+    "client.diff.js",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg"
@@ -38,5 +39,25 @@
         "@deepseek-ai/dsh-client-ui-sidebar-right"
       ]
     }
+  },
+  "devDependencies": {
+    "@pierre/diffs": "1.5.2",
+    "@radix-ui/react-slot": "1.1.1",
+    "@types/node": "22.10.5",
+    "@types/react": "18.3.18",
+    "@types/react-dom": "18.3.5",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "esbuild": "0.25.10",
+    "lucide-react": "0.468.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "tailwind-merge": "2.6.0",
+    "tailwindcss": "3.4.17",
+    "typescript": "5.7.3"
+  },
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "typecheck": "tsc --noEmit"
   }
 }

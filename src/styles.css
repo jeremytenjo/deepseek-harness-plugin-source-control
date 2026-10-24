@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  .dshcm-ui {
+    --background: var(--dsw-alias-bg-base);
+    --foreground: var(--dsw-alias-label-primary);
+    --card: var(--dsw-alias-bg-layer-1);
+    --card-foreground: var(--dsw-alias-label-primary);
+    --popover: var(--dsw-alias-bg-layer-1);
+    --popover-foreground: var(--dsw-alias-label-primary);
+    --primary: var(--dsw-alias-brand-primary);
+    --primary-foreground: var(--dsw-alias-bg-base);
+    --secondary: var(--dsw-alias-bg-layer-2);
+    --secondary-foreground: var(--dsw-alias-label-primary);
+    --muted: var(--dsw-alias-bg-layer-2);
+    --muted-foreground: var(--dsw-alias-label-secondary);
+    --accent: var(--dsw-alias-bg-layer-3);
+    --accent-foreground: var(--dsw-alias-label-primary);
+    --destructive: var(--dsw-alias-state-error-primary);
+    --destructive-foreground: var(--dsw-alias-bg-base);
+    --border: var(--dsw-alias-border-l1);
+    --input: var(--dsw-alias-border-l1);
+    --ring: var(--dsw-alias-brand-primary);
+    --radius: 8px;
+    --dshcm-font-sans: var(--dsw-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+    --dshcm-font-mono: var(--dsw-font-family-code, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+
+    box-sizing: border-box;
+    color: var(--foreground);
+    font-family: var(--dshcm-font-sans);
+  }
+
+  .dshcm-ui *,
+  .dshcm-ui *::before,
+  .dshcm-ui *::after {
+    box-sizing: border-box;
+  }
+
+  .dshcm-ui button {
+    font-family: inherit;
+  }
+}

@@ -10,7 +10,7 @@ The Git button beside the chat submit button toggles the session's right sidebar
 - Edit the generated message before committing.
 - **Commit changes** stages all current changes (`git add -A`) and commits them.
 - **Changes** lists every modified, added, and untracked file; click a file to open its unified diff in a sidebar tab.
-- **Diff view** shows the working tree against `HEAD` (or the staged and unstaged changes before the first commit), with line numbers and added/removed counts; **Open file** switches to the full file viewer.
+- **Diff view** shows the working tree against `HEAD` (or the staged and unstaged changes before the first commit) with T3-style syntax highlighting from `@pierre/diffs`, line numbers, hunk separators, and added/removed counts; **Open file** switches to the full file viewer.
 - Shows **only unpushed commits**, with short hash, subject, author, and date.
 - **Push commits** appears when the local branch is ahead of its upstream, and pushes with `git push`.
 - **GitHub** opens the connected GitHub repository from the panel header. When the repository has no GitHub remote, it offers to create a private or public repository with the GitHub CLI, adds the remote, and pushes the current branch.
@@ -25,6 +25,7 @@ The Git button beside the chat submit button toggles the session's right sidebar
 - A configured model for message generation.
 - An upstream branch for the push action; the plugin does not guess a remote.
 - For repository creation, the GitHub CLI (`gh`) installed and authenticated (`gh auth login`).
+- Node.js and pnpm only for building the browser bundle; the installed plugin needs neither.
 
 ## Install
 
@@ -67,29 +68,46 @@ Only commits ahead of the upstream are listed. After a successful push that list
 | Path | Purpose |
 |---|---|
 | `index.js` | Host plugin: Git status, diff collection, model call, commit, push, and the loopback route |
-| `client.js` | Browser plugin: source-control panel, per-file diff tabs, commit list, generation and action controls |
+| `client.js` | Built browser entry: source-control panel, per-file diff tabs, commit list, generation and action controls |
+| `client.diff.js` | Lazily loaded chunk with `@pierre/diffs`, Sidebar diff UI, Tailwind and shadcn primitives |
+| `src/client.tsx` | TSX entry for the built client |
+| `src/legacy-client.js` | Source-control panel, GitHub flow, and data fetching; now imported by the TSX entry |
+| `src/diff/DiffView.tsx` | T3-style diff surface and header |
+| `src/components/ui/button.tsx` | shadcn-style Button used by the diff view |
+| `src/styles.css`, `tailwind.config.cjs` | Tailwind entry and prefixed configuration |
+| `components.json` | shadcn configuration (`dshcm-` class prefix) |
+| `scripts/build-client.mjs` | Builds the main bundle and the lazy diff chunk |
 | `cordis.patch.yml` | Bundle patch that inserts the Host row |
 | `locale/en.json`, `locale/zh.json` | Plugin display metadata |
 | `icon.svg` | Plugin icon |
 
 ## Development notes
 
-The browser half is a prebuilt lazy-CJS module (`client.js`), not a bundler output. It registers a factory with `window.__ModuleLoader__` and requires only `react` from the Harness baseline. The Host half has no dependencies.
+The browser half is built from TSX with React, Tailwind CSS, and shadcn-style primitives. `client.js` is the small eager entry; the `@pierre/diffs` renderer lives in `client.diff.js` and is fetched with `require.async` only when a diff tab first opens. Both artifacts use the Harness lazy-CJS module wrapper and externalize `react` / `react/jsx-runtime`.
 
-There is no build step:
+The Host half has no dependencies.
+
+Install the build dependencies and rebuild after changing anything under `src/`:
 
 ```bash
+pnpm install
+pnpm typecheck
+pnpm build
 node --check index.js
 node --check client.js
 ```
 
-After editing a linked install, reload the plugin through the Plugin Manager (disable/enable) or restart the Host.
+`pnpm build` writes `.build/`, then regenerates `client.js` and `client.diff.js` in the repository root. Commit both artifacts; the plugin package ships them.
+
+After editing a linked install, reload the plugin through the Plugin Manager (disable/enable) or restart the Host. A page refresh only replaces the browser half; Host changes (status fields, the `diff` and `create-github` actions) need the Host half reloaded. When the browser sees a status response from an older Host without `githubUrl`, it reports that the Host is out of date instead of opening the repository-creation dialog.
 
 ## Current limits
 
 - Only branches with an upstream can be pushed from the panel.
 - The diff view compares the working tree with `HEAD`; it does not show history or compare arbitrary revisions.
 - The commit list is capped at the 8 newest unpushed commits.
+- The diff highlighter runs on the main thread and the lazy renderer chunk is about 10 MB; the first diff open pays that download and parse cost.
+- Hunk separators show the unchanged-line count but do not expand collapsed lines.
 - GitHub support targets `github.com` only; it does not detect or create GitHub Enterprise repositories.
 - Git identity, hooks, and credentials must already work from the command line.
 - The plugin is not published to npm; install it from this repository as a local bundle.
