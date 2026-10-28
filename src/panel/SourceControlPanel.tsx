@@ -312,7 +312,7 @@ export function SourceControlPanel({
         ) : null}
       </div>
 
-      {status && status.changedFiles === 0 ? (
+      {status && status.changedFiles === 0 && status.ahead === 0 ? (
         <div className="dshcm-flex dshcm-flex-col">
           <Button
             variant="outline"
