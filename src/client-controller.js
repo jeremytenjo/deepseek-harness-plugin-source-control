@@ -46,6 +46,8 @@ const h = React.createElement;
 
     const EN = {
       title: 'Source control',
+      done: 'Done',
+      doneAria: 'Close the source control panel',
       messageLabel: 'Commit message',
       messagePlaceholder: 'Message ({key} to commit on "{branch}")',
       changes: 'Changes',
@@ -150,6 +152,8 @@ const h = React.createElement;
 
     const ZH = {
       title: '源代码管理',
+      done: '完成',
+      doneAria: '关闭源代码管理面板',
       messageLabel: '提交信息',
       messagePlaceholder: '提交信息（{key} 在“{branch}”上提交）',
       changes: '更改',
@@ -512,6 +516,7 @@ const h = React.createElement;
       const resourceSessionId = props.sessionId;
       const sessionId = normaliseSessionId(resourceSessionId);
       const translate = useTranslate(props.clientCtx);
+      const tabInfo = typeof props.useTabInfo === 'function' ? props.useTabInfo() : null;
       const [status, setStatus] = React.useState(null);
       const [message, setMessage] = React.useState('');
       const [busy, setBusy] = React.useState('status');
@@ -945,6 +950,24 @@ const h = React.createElement;
         }
       }
 
+      function closePanel() {
+        const tab = tabInfo && tabInfo.tab;
+        try {
+          if (tab && tab.actions && typeof tab.actions.close === 'function') {
+            tab.actions.close();
+            return;
+          }
+          const sidebar = props.clientCtx.sidebarRight;
+          if (tab && tab.id) {
+            sidebar.close(tab.id);
+            return;
+          }
+          if (sidebar.isExpanded()) sidebar.toggleExpanded();
+        } catch (error) {
+          console.error('commit-message: could not close the source control panel', error);
+        }
+      }
+
       function onMessageKeyDown(event) {
         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && canCommit) {
           event.preventDefault();
@@ -1004,6 +1027,7 @@ const h = React.createElement;
         onRefresh: refresh,
         onToggleChanges: () => setChangesOpen((value) => !value),
         onOpenDiff: openDiff,
+        onDone: closePanel,
         onOpenGitHub: openGitHub,
         onOpenBranches: openBranches,
         onCloseBranches: closeBranches,

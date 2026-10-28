@@ -98,6 +98,7 @@ export interface SourceControlPanelProps {
   onRefresh(): void;
   onToggleChanges(): void;
   onOpenDiff(file: ChangedFile): void;
+  onDone(): void;
   onOpenGitHub(): void;
   onOpenBranches(): void;
   onCloseBranches(): void;

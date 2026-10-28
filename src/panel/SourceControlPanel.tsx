@@ -109,6 +109,7 @@ export function SourceControlPanel({
   onRefresh,
   onToggleChanges,
   onOpenDiff,
+  onDone,
   onOpenGitHub,
   onOpenBranches,
   onCloseBranches,
@@ -310,6 +311,20 @@ export function SourceControlPanel({
           </Button>
         ) : null}
       </div>
+
+      {status && status.changedFiles === 0 ? (
+        <div className="dshcm-flex dshcm-flex-col">
+          <Button
+            variant="outline"
+            onClick={onDone}
+            aria-label={t('doneAria')}
+            title={t('doneAria')}
+            className="dshcm-h-9 dshcm-w-full dshcm-border-transparent dshcm-bg-white dshcm-text-[13px] dshcm-font-medium dshcm-text-black hover:dshcm-bg-white/90 hover:dshcm-text-black active:dshcm-opacity-90"
+          >
+            {t('done')}
+          </Button>
+        </div>
+      ) : null}
 
       {status?.isRepo ? (
         <section aria-label={t('changes')} className="dshcm-border-t dshcm-border-border dshcm-pt-2.5">
