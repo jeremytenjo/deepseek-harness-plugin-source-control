@@ -285,14 +285,14 @@ export function SourceControlPanel({
         />
       </div>
 
-      <div className="dshcm-flex dshcm-items-center dshcm-gap-1.5">
+      <div className="dshcm-flex dshcm-flex-col dshcm-gap-1.5">
         <Button
           variant="default"
           onClick={onCommit}
           disabled={!canCommit}
           aria-label={t('commitAria')}
           title={t('commitAria')}
-          className="dshcm-h-9 dshcm-flex-1 hover:dshcm-bg-primary hover:dshcm-text-primary-foreground active:dshcm-opacity-90 disabled:dshcm-bg-secondary disabled:dshcm-text-muted-foreground disabled:dshcm-opacity-100"
+          className="dshcm-h-9 dshcm-w-full hover:dshcm-bg-primary hover:dshcm-text-primary-foreground active:dshcm-opacity-90 disabled:dshcm-bg-secondary disabled:dshcm-text-muted-foreground disabled:dshcm-opacity-100"
         >
           <Check className="dshcm-size-3.5" />
           {busy === 'commit' ? t('committing') : t('commit')}
@@ -304,7 +304,7 @@ export function SourceControlPanel({
             disabled={!canPush}
             aria-label={t('pushAria')}
             title={t('pushAria')}
-            className="dshcm-h-9 dshcm-shrink-0"
+            className="dshcm-h-9 dshcm-w-full dshcm-border-transparent dshcm-bg-white dshcm-text-black hover:dshcm-bg-white/90 hover:dshcm-text-black active:dshcm-opacity-90 disabled:dshcm-bg-white/60 disabled:dshcm-text-black/60"
           >
             <Upload className="dshcm-size-3.5" />
             {pushLabel(status, busy, fmt, t)}

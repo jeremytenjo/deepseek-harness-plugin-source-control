@@ -952,19 +952,20 @@ const h = React.createElement;
 
       function closePanel() {
         const tab = tabInfo && tabInfo.tab;
+        const sidebar = props.clientCtx.sidebarRight;
         try {
           if (tab && tab.actions && typeof tab.actions.close === 'function') {
             tab.actions.close();
-            return;
-          }
-          const sidebar = props.clientCtx.sidebarRight;
-          if (tab && tab.id) {
+          } else if (tab && tab.id) {
             sidebar.close(tab.id);
-            return;
           }
-          if (sidebar.isExpanded()) sidebar.toggleExpanded();
         } catch (error) {
           console.error('commit-message: could not close the source control panel', error);
+        }
+        try {
+          if (sidebar.isExpanded()) sidebar.toggleExpanded();
+        } catch (error) {
+          console.error('commit-message: could not collapse the right sidebar', error);
         }
       }
 
