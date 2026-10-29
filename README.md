@@ -21,6 +21,7 @@ Review changes, generate commit messages, commit, push, and manage GitHub reposi
 - Click an image to open a full-screen viewer with wheel/pinch zoom, drag-to-pan, and a close button.
 - Right-click a line in the diff to open the file in VS Code at that line.
 - Push unpushed commits to the configured upstream.
+- Discard all uncommitted changes from the Changes header, with a confirmation that covers staged, unstaged, and untracked files.
 - Open the connected GitHub repository, or create a private/public repository with `gh`.
 - Restart the app and Host from a dead-session error.
 - English and Chinese UI.

@@ -13,6 +13,8 @@ const buttonVariants = cva(
         outline:
           'dshcm-border dshcm-border-border dshcm-bg-transparent dshcm-text-foreground hover:dshcm-bg-accent hover:dshcm-text-accent-foreground',
         ghost: 'dshcm-text-muted-foreground hover:dshcm-bg-accent hover:dshcm-text-accent-foreground',
+        destructive:
+          'dshcm-bg-destructive dshcm-text-destructive-foreground hover:dshcm-opacity-90',
         secondary:
           'dshcm-bg-secondary dshcm-text-secondary-foreground hover:dshcm-bg-accent hover:dshcm-text-accent-foreground',
       },

@@ -52,6 +52,15 @@ const h = React.createElement;
       messagePlaceholder: 'Message ({key} to commit on "{branch}")',
       changes: 'Changes',
       showChanges: 'Show changes in {path}',
+      discardAria: 'Discard all uncommitted changes',
+      discardTitle: 'Discard all changes?',
+      discardDescription: 'This permanently removes every change in this repository.',
+      discardWarning:
+        'Staged and unstaged changes are reverted to HEAD, and untracked files are deleted. Ignored files are kept. This cannot be undone.',
+      discardCancel: 'Cancel',
+      discardConfirm: 'Discard all',
+      discarding: 'Discarding…',
+      discarded: 'Discarded all uncommitted changes.',
       openChangesFailed: 'Could not open the changes for {path}.',
       diffTab: 'Changes: {name}',
       diffLoading: 'Loading changes…',
@@ -158,6 +167,15 @@ const h = React.createElement;
       messagePlaceholder: '提交信息（{key} 在“{branch}”上提交）',
       changes: '更改',
       showChanges: '查看 {path} 的更改',
+      discardAria: '丢弃所有未提交的更改',
+      discardTitle: '丢弃所有更改？',
+      discardDescription: '这将永久移除该仓库中的所有更改。',
+      discardWarning:
+        '已暂存和未暂存的更改会还原到 HEAD，未跟踪的文件会被删除。被忽略的文件会保留。此操作无法撤销。',
+      discardCancel: '取消',
+      discardConfirm: '全部丢弃',
+      discarding: '正在丢弃…',
+      discarded: '已丢弃所有未提交的更改。',
       openChangesFailed: '无法打开 {path} 的更改。',
       diffTab: '更改：{name}',
       diffLoading: '正在加载更改…',
@@ -524,6 +542,7 @@ const h = React.createElement;
       const [changesOpen, setChangesOpen] = React.useState(true);
       const [github, setGithub] = React.useState(null);
       const [branch, setBranch] = React.useState(null);
+      const [discardOpen, setDiscardOpen] = React.useState(false);
       const [restarting, setRestarting] = React.useState(false);
       const active = React.useRef(null);
       const focusController = React.useRef(null);
@@ -572,6 +591,7 @@ const h = React.createElement;
           setFeedback(null);
           setGithub(null);
           setBranch(null);
+          setDiscardOpen(false);
         }
         setBusy('status');
         request('status', {}, controller.signal)
@@ -878,6 +898,39 @@ const h = React.createElement;
       const canGenerate = Boolean(status && status.isRepo && status.changedFiles > 0) && !busy;
       const canCommit = canGenerate && message.trim().length > 0;
       const canPush = Boolean(status && status.hasCommits && status.ahead > 0) && !busy;
+      const canDiscard = Boolean(status && status.isRepo && status.changedFiles > 0) && !busy;
+
+      function openDiscard() {
+        if (!canDiscard) return;
+        setDiscardOpen(true);
+      }
+
+      function closeDiscard() {
+        if (busy === 'discard') return;
+        setDiscardOpen(false);
+      }
+
+      async function discardAll() {
+        if (!canDiscard) return;
+        setBusy('discard');
+        setFeedback(null);
+        try {
+          const data = await request('discard', {});
+          setStatus(readStatus(data));
+          setMessage('');
+          setDiscardOpen(false);
+          setFeedback({ kind: 'success', text: translate('discarded') });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          setDiscardOpen(false);
+          setFeedback({
+            kind: 'error',
+            text: /unknown action/i.test(message) ? translate('hostOutdated') : message,
+          });
+        } finally {
+          setBusy(null);
+        }
+      }
 
       async function generate() {
         if (!canGenerate) return;
@@ -1014,6 +1067,8 @@ const h = React.createElement;
         canGenerate,
         canCommit,
         canPush,
+        canDiscard,
+        discardOpen,
         showPush,
         summary,
         messagePlaceholder,
@@ -1025,6 +1080,9 @@ const h = React.createElement;
         onGenerate: generate,
         onCommit: commit,
         onPush: pushCommits,
+        onOpenDiscard: openDiscard,
+        onCloseDiscard: closeDiscard,
+        onDiscardAll: discardAll,
         onRefresh: refresh,
         onToggleChanges: () => setChangesOpen((value) => !value),
         onOpenDiff: openDiff,

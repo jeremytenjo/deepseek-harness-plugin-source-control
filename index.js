@@ -164,6 +164,7 @@ async function handleRequest(ctx, req, res) {
       action !== 'generate' &&
       action !== 'commit' &&
       action !== 'push' &&
+      action !== 'discard' &&
       action !== 'create-github' &&
       action !== 'restart-harness'
     ) {
@@ -287,6 +288,15 @@ async function handleRequest(ctx, req, res) {
         upstream: next.upstream || status.upstream,
         ...publicStatus(next),
       });
+      return;
+    }
+
+    if (action === 'discard') {
+      const status = await inspectRepo(ctx, cwd, deadline.signal);
+      assertCommittable(status);
+      const discarded = await discardAllChanges(ctx, status.top || cwd, status, deadline.signal);
+      const next = await inspectRepo(ctx, cwd, deadline.signal);
+      send(res, 200, { ok: true, discarded, ...publicStatus(next) });
       return;
     }
 
@@ -754,6 +764,48 @@ async function changeBranch(ctx, cwd, inputName, create, signal) {
   }
   const next = await inspectRepo(ctx, cwd, signal);
   return { branch: next.branch };
+}
+
+/**
+ * Return the whole repository to `HEAD`: reset tracked files and remove
+ * untracked ones, while leaving ignored files alone.
+ */
+async function discardAllChanges(ctx, root, status, signal) {
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
+  if (status.hasCommits) {
+    const reset = await runGit(ctx, root, ['reset', '--hard', 'HEAD'], signal, { env });
+    if (reset.code !== 0) {
+      throw new RequestError(
+        409,
+        friendlyGitError(reset, 'Could not discard the tracked changes.'),
+      );
+    }
+  } else {
+    // An unborn branch has no HEAD to restore from; unstage everything first so
+    // `git clean` sees the files as untracked and removes them too.
+    const cleared = await runGit(
+      ctx,
+      root,
+      ['rm', '-r', '--cached', '--ignore-unmatch', '--', '.'],
+      signal,
+      { env },
+    );
+    if (cleared.code !== 0) {
+      throw new RequestError(
+        409,
+        friendlyGitError(cleared, 'Could not discard the staged changes.'),
+      );
+    }
+  }
+
+  const cleaned = await runGit(ctx, root, ['clean', '-fd'], signal, { env });
+  if (cleaned.code !== 0) {
+    throw new RequestError(
+      409,
+      friendlyGitError(cleaned, 'Could not remove the untracked files.'),
+    );
+  }
+  return status.changedFiles;
 }
 
 async function openInVSCode(ctx, cwd, inputPath, line, signal) {

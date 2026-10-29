@@ -7,7 +7,7 @@ export interface Feedback {
   text: string;
 }
 
-export type Busy = 'status' | 'generate' | 'commit' | 'push' | null;
+export type Busy = 'status' | 'generate' | 'commit' | 'push' | 'discard' | null;
 
 export interface ChangedFile {
   path: string;
@@ -84,6 +84,8 @@ export interface SourceControlPanelProps {
   canGenerate: boolean;
   canCommit: boolean;
   canPush: boolean;
+  canDiscard: boolean;
+  discardOpen: boolean;
   showPush: boolean;
   summary: string;
   messagePlaceholder: string;
@@ -95,6 +97,9 @@ export interface SourceControlPanelProps {
   onGenerate(): void;
   onCommit(): void;
   onPush(): void;
+  onOpenDiscard(): void;
+  onCloseDiscard(): void;
+  onDiscardAll(): void;
   onRefresh(): void;
   onToggleChanges(): void;
   onOpenDiff(file: ChangedFile): void;

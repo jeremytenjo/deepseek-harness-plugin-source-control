@@ -12,6 +12,7 @@ import {
   Info,
   RefreshCw,
   Sparkles,
+  Undo2,
   Upload,
 } from 'lucide-react';
 
@@ -20,6 +21,7 @@ import { Textarea } from '../components/ui/textarea';
 import { ensureTailwindStyles } from '../lib/styles';
 import { cn } from '../lib/utils';
 import { BranchDialog } from './BranchDialog';
+import { DiscardDialog } from './DiscardDialog';
 import { GitHubDialog } from './GitHubDialog';
 import type {
   ChangedFile,
@@ -95,6 +97,8 @@ export function SourceControlPanel({
   canGenerate,
   canCommit,
   canPush,
+  canDiscard,
+  discardOpen,
   showPush,
   summary,
   messagePlaceholder,
@@ -106,6 +110,9 @@ export function SourceControlPanel({
   onGenerate,
   onCommit,
   onPush,
+  onOpenDiscard,
+  onCloseDiscard,
+  onDiscardAll,
   onRefresh,
   onToggleChanges,
   onOpenDiff,
@@ -328,25 +335,37 @@ export function SourceControlPanel({
 
       {status?.isRepo ? (
         <section aria-label={t('changes')} className="dshcm-border-t dshcm-border-border dshcm-pt-2.5">
-          <button
-            type="button"
-            onClick={onToggleChanges}
-            aria-expanded={changesOpen}
-            aria-controls={changesId}
-            className="dshcm-flex dshcm-w-full dshcm-items-center dshcm-gap-1.5 dshcm-rounded-md dshcm-border-0 dshcm-bg-transparent dshcm-px-1 dshcm-py-1 dshcm-text-left dshcm-transition-colors hover:dshcm-bg-secondary focus-visible:dshcm-outline-none focus-visible:dshcm-ring-2 focus-visible:dshcm-ring-ring"
-          >
-            {changesOpen ? (
-              <ChevronDown className="dshcm-size-3.5 dshcm-flex-none dshcm-text-muted-foreground" />
-            ) : (
-              <ChevronRight className="dshcm-size-3.5 dshcm-flex-none dshcm-text-muted-foreground" />
-            )}
-            <span className="dshcm-text-xs dshcm-font-semibold dshcm-text-foreground">
-              {t('changes')}
-            </span>
-            <span className="dshcm-ml-auto dshcm-text-[11px] dshcm-tabular-nums dshcm-text-muted-foreground">
-              {status.changedFiles}
-            </span>
-          </button>
+          <div className="dshcm-flex dshcm-items-center dshcm-gap-1">
+            <button
+              type="button"
+              onClick={onToggleChanges}
+              aria-expanded={changesOpen}
+              aria-controls={changesId}
+              className="dshcm-flex dshcm-min-w-0 dshcm-flex-1 dshcm-items-center dshcm-gap-1.5 dshcm-rounded-md dshcm-border-0 dshcm-bg-transparent dshcm-px-1 dshcm-py-1 dshcm-text-left dshcm-transition-colors hover:dshcm-bg-secondary focus-visible:dshcm-outline-none focus-visible:dshcm-ring-2 focus-visible:dshcm-ring-ring"
+            >
+              {changesOpen ? (
+                <ChevronDown className="dshcm-size-3.5 dshcm-flex-none dshcm-text-muted-foreground" />
+              ) : (
+                <ChevronRight className="dshcm-size-3.5 dshcm-flex-none dshcm-text-muted-foreground" />
+              )}
+              <span className="dshcm-text-xs dshcm-font-semibold dshcm-text-foreground">
+                {t('changes')}
+              </span>
+              <span className="dshcm-ml-auto dshcm-text-[11px] dshcm-tabular-nums dshcm-text-muted-foreground">
+                {status.changedFiles}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={onOpenDiscard}
+              disabled={!canDiscard}
+              aria-label={t('discardAria')}
+              title={t('discardAria')}
+              className="dshcm-flex dshcm-h-7 dshcm-w-7 dshcm-flex-none dshcm-items-center dshcm-justify-center dshcm-rounded-md dshcm-border-0 dshcm-bg-transparent dshcm-p-0 dshcm-text-muted-foreground dshcm-transition-colors hover:dshcm-bg-secondary hover:dshcm-text-[color:var(--dsw-alias-state-error-primary)] focus-visible:dshcm-outline-none focus-visible:dshcm-ring-1 focus-visible:dshcm-ring-ring disabled:dshcm-pointer-events-none disabled:dshcm-opacity-40"
+            >
+              <Undo2 className="dshcm-size-3.5" />
+            </button>
+          </div>
           {changesOpen ? (
             status.files.length > 0 ? (
               <ul id={changesId} className="dshcm-m-0 dshcm-mt-0.5 dshcm-list-none dshcm-p-0">
@@ -458,6 +477,14 @@ export function SourceControlPanel({
         onBack={onBackToVisibility}
         onRepositoryName={onRepositoryName}
         onCreate={onCreateRepository}
+      />
+
+      <DiscardDialog
+        open={discardOpen}
+        busy={busy === 'discard'}
+        t={t}
+        onClose={onCloseDiscard}
+        onConfirm={onDiscardAll}
       />
     </div>
   );
