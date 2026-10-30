@@ -4,6 +4,7 @@ import * as React from 'react';
 import { GitBranch } from 'lucide-react';
 
 import { SourceControlPanel } from './panel/SourceControlPanel';
+import { CommitTrigger } from './panel/CommitTrigger';
 
 const h = React.createElement;
     const NS = 'dshCommitMessage';
@@ -12,6 +13,20 @@ const h = React.createElement;
     const TAB_ID = '@local/dsh-commit-message';
     const DIFF_KIND = 'source-control-diff';
     const DIFF_TAB_ID = '@local/dsh-commit-message/diff';
+
+    // Panels subscribe here so a commit/push started from the composer trigger
+    // does not leave their working-tree state stale.
+    const statusListeners = new Set();
+
+    function notifyStatusChanged() {
+      for (const listener of statusListeners) {
+        try {
+          listener();
+        } catch (error) {
+          console.error('commit-message: status listener failed', error);
+        }
+      }
+    }
     const MEDIA_ROUTE = '/__dsh/commit-message-media';
 
     const MEDIA_EXTENSIONS = new Map([
@@ -85,6 +100,11 @@ const h = React.createElement;
       diffAdded: '{count} added',
       diffRemoved: '{count} removed',
       showPanel: 'Toggle source control panel',
+      triggerGeneratePush: 'Generate + Push Commit',
+      triggerBusy: 'Generating a message and pushing…',
+      triggerPushed: 'Committed {hash} and pushed.',
+      triggerPushFailed: 'Committed {hash}, but the push failed: {error}',
+      triggerEmptyMessage: 'The generated commit message was empty.',
       generate: 'Generate',
       generating: 'Generating…',
       refresh: 'Refresh changes',
@@ -200,6 +220,11 @@ const h = React.createElement;
       diffAdded: '新增 {count} 行',
       diffRemoved: '删除 {count} 行',
       showPanel: '切换源代码管理面板',
+      triggerGeneratePush: '生成并推送提交',
+      triggerBusy: '正在生成提交信息并推送…',
+      triggerPushed: '已提交 {hash} 并推送。',
+      triggerPushFailed: '已提交 {hash}，但推送失败：{error}',
+      triggerEmptyMessage: '生成的提交信息为空。',
       generate: '生成',
       generating: '正在生成…',
       refresh: '刷新更改',
@@ -450,6 +475,33 @@ const h = React.createElement;
       return data;
     }
 
+    async function rpc(sessionId, action, payload, translate, signal) {
+      let response;
+      try {
+        response = await fetch(ROUTE, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ action, sessionId, ...payload }),
+          signal,
+        });
+      } catch (error) {
+        if (error && error.name === 'AbortError') throw error;
+        throw new Error(translate('networkFailed'));
+      }
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error(translate('unreadable'));
+      }
+      if (!response.ok || !data || data.ok !== true) {
+        throw new Error(
+          (data && typeof data.error === 'string' && data.error) || translate('requestFailed'),
+        );
+      }
+      return data;
+    }
+
     async function requestOpenInVSCode(sessionId, path, line, translate) {
       let response;
       try {
@@ -492,32 +544,68 @@ const h = React.createElement;
       });
     }
 
-    function CommitTrigger(props) {
-      const translate = useTranslate(props.clientCtx);
-      function openPanel() {
-        try {
-          const sidebar = props.clientCtx.sidebarRight;
-          const active = sidebar.active();
-          if (sidebar.isExpanded() && active?.kind === KIND) {
-            sidebar.toggleExpanded();
-            return;
-          }
-          sidebar.openTab(KIND);
-        } catch (error) {
-          console.error('commit-message: could not toggle the right sidebar', error);
+    function openPanel(clientCtx) {
+      try {
+        const sidebar = clientCtx.sidebarRight;
+        const active = sidebar.active();
+        if (sidebar.isExpanded() && active?.kind === KIND) {
+          sidebar.toggleExpanded();
+          return;
         }
+        sidebar.openTab(KIND);
+      } catch (error) {
+        console.error('commit-message: could not toggle the right sidebar', error);
       }
-      return h(
-        'button',
-        {
-          type: 'button',
-          className: 'dshcm-trigger',
-          onClick: openPanel,
-          'aria-label': translate('showPanel'),
-          title: translate('showPanel'),
-        },
-        h(GitIcon),
-      );
+    }
+
+    async function generateAndPush(sessionKey, translate) {
+      try {
+        const generated = await rpc(sessionKey, 'generate', {}, translate);
+        const message = String(generated.message || '').trim();
+        if (!message) {
+          return { ok: false, text: translate('triggerEmptyMessage') };
+        }
+        const committed = await rpc(sessionKey, 'commit', { message }, translate);
+        const hash = committed.hash || 'HEAD';
+        let pushError = null;
+        try {
+          await rpc(sessionKey, 'push', {}, translate);
+        } catch (error) {
+          pushError = error;
+        }
+        notifyStatusChanged();
+        if (pushError) {
+          return {
+            ok: false,
+            text: format(translate, 'triggerPushFailed', {
+              hash,
+              error: pushError instanceof Error ? pushError.message : String(pushError),
+            }),
+          };
+        }
+        return { ok: true, text: format(translate, 'triggerPushed', { hash }) };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const lower = message.toLowerCase();
+        const text = lower.includes('no uncommitted changes')
+          ? translate('noChanges')
+          : lower.includes('not a git repository')
+            ? translate('notRepo')
+            : lower.includes('unknown action')
+              ? translate('hostOutdated')
+              : message;
+        return { ok: false, text };
+      }
+    }
+
+    function TriggerSeat(props) {
+      const translate = useTranslate(props.clientCtx);
+      const sessionKey = normaliseSessionId(props.sessionId);
+      return h(CommitTrigger, {
+        t: translate,
+        onOpenPanel: () => openPanel(props.clientCtx),
+        onGeneratePush: () => generateAndPush(sessionKey, translate),
+      });
     }
 
     function CommitTabTitle(props) {
@@ -553,30 +641,7 @@ const h = React.createElement;
       }, [busy]);
 
       const request = React.useCallback(
-        async (action, payload, signal) => {
-          let response;
-          try {
-            response = await fetch(ROUTE, {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ action, sessionId, ...payload }),
-              signal,
-            });
-          } catch (error) {
-            if (error && error.name === 'AbortError') throw error;
-            throw new Error(translate('networkFailed'));
-          }
-          let data;
-          try {
-            data = await response.json();
-          } catch {
-            throw new Error(translate('unreadable'));
-          }
-          if (!response.ok || !data || data.ok !== true) {
-            throw new Error((data && typeof data.error === 'string' && data.error) || translate('requestFailed'));
-          }
-          return data;
-        },
+        (action, payload, signal) => rpc(sessionId, action, payload, translate, signal),
         [sessionId, translate],
       );
 
@@ -663,6 +728,19 @@ const h = React.createElement;
           window.removeEventListener('focus', refreshOnFocus);
           document.removeEventListener('visibilitychange', refreshOnFocus);
           if (focusController.current) focusController.current.abort();
+        };
+      }, [request]);
+
+      React.useEffect(() => {
+        const listener = () => {
+          if (busyRef.current) return;
+          request('status', {})
+            .then((data) => setStatus(readStatus(data)))
+            .catch(() => {});
+        };
+        statusListeners.add(listener);
+        return () => {
+          statusListeners.delete(listener);
         };
       }, [request]);
 
@@ -1314,7 +1392,7 @@ export function apply(ctx) {
         const t = ctx.locale.bind(NS);
         const Dock = (props) => h(CommitDock, { ...props, clientCtx: ctx });
         const Diff = (props) => h(DiffDock, { ...props, clientCtx: ctx });
-        const Trigger = (props) => h(CommitTrigger, { ...props, clientCtx: ctx });
+        const Trigger = (props) => h(TriggerSeat, { ...props, clientCtx: ctx });
         const Title = (props) => h(CommitTabTitle, { ...props, clientCtx: ctx });
         ctx.effect(() => ctx.locale.register(NS, 'en', EN), 'commit-message: en locale');
         ctx.effect(() => ctx.locale.register(NS, 'zh', ZH), 'commit-message: zh locale');
