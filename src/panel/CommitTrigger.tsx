@@ -14,6 +14,7 @@ import type { Translate } from './types';
 export interface CommitTriggerResult {
   ok: boolean;
   text: string;
+  preview?: string;
 }
 
 interface CommitTriggerProps {
@@ -26,6 +27,7 @@ interface ToastState {
   seq: number;
   text: string;
   ok: boolean;
+  preview?: string;
   left: number;
   top: number;
 }
@@ -35,12 +37,14 @@ const TOAST_HOLD_MS = 5000;
 function TriggerToast({
   text,
   ok,
+  preview,
   left,
   top,
   onDismiss,
 }: {
   text: string;
   ok: boolean;
+  preview?: string;
   left: number;
   top: number;
   onDismiss(): void;
@@ -63,7 +67,17 @@ function TriggerToast({
       ) : (
         <CircleAlert className="dshcm-mt-0.5 dshcm-size-3.5 dshcm-flex-none dshcm-text-[color:var(--dsw-alias-state-error-primary)]" />
       )}
-      <span className="dshcm-min-w-0 dshcm-break-words dshcm-whitespace-pre-line">{text}</span>
+      <div className="dshcm-flex dshcm-min-w-0 dshcm-flex-col dshcm-gap-0.5">
+        <span className="dshcm-break-words dshcm-whitespace-pre-line">{text}</span>
+        {preview ? (
+          <span
+            className="dshcm-min-w-0 dshcm-truncate dshcm-text-[11px] dshcm-text-muted-foreground"
+            title={preview}
+          >
+            {preview}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -85,7 +99,7 @@ export function CommitTrigger({ t, onOpenPanel, onGeneratePush }: CommitTriggerP
 
   const dismissToast = React.useCallback(() => setToast(null), []);
 
-  function presentToast(text: string, ok: boolean) {
+  function presentToast(text: string, ok: boolean, preview?: string) {
     const button = buttonRef.current;
     const card = button?.closest('[data-composer-card]');
     const rect = (card ?? button)?.getBoundingClientRect();
@@ -99,7 +113,7 @@ export function CommitTrigger({ t, onOpenPanel, onGeneratePush }: CommitTriggerP
       : window.innerWidth / 2;
     const top = rect ? rect.top - 12 : window.innerHeight - 120;
     toastSeq.current += 1;
-    setToast({ seq: toastSeq.current, text, ok, left, top });
+    setToast({ seq: toastSeq.current, text, ok, preview, left, top });
   }
 
   async function runGeneratePush() {
@@ -108,7 +122,7 @@ export function CommitTrigger({ t, onOpenPanel, onGeneratePush }: CommitTriggerP
     setBusy(true);
     try {
       const result = await onGeneratePush();
-      if (mounted.current) presentToast(result.text, result.ok);
+      if (mounted.current) presentToast(result.text, result.ok, result.preview);
     } catch (error) {
       if (mounted.current) {
         presentToast(error instanceof Error ? error.message : String(error), false);
@@ -165,6 +179,7 @@ export function CommitTrigger({ t, onOpenPanel, onGeneratePush }: CommitTriggerP
               key={toast.seq}
               text={toast.text}
               ok={toast.ok}
+              preview={toast.preview}
               left={toast.left}
               top={toast.top}
               onDismiss={dismissToast}

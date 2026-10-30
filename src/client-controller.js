@@ -565,6 +565,7 @@ const h = React.createElement;
         if (!message) {
           return { ok: false, text: translate('triggerEmptyMessage') };
         }
+        const preview = message.split('\n').map((line) => line.trim()).find(Boolean) || '';
         const committed = await rpc(sessionKey, 'commit', { message }, translate);
         const hash = committed.hash || 'HEAD';
         let pushError = null;
@@ -577,13 +578,14 @@ const h = React.createElement;
         if (pushError) {
           return {
             ok: false,
+            preview,
             text: format(translate, 'triggerPushFailed', {
               hash,
               error: pushError instanceof Error ? pushError.message : String(pushError),
             }),
           };
         }
-        return { ok: true, text: format(translate, 'triggerPushed', { hash }) };
+        return { ok: true, preview, text: format(translate, 'triggerPushed', { hash }) };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const lower = message.toLowerCase();

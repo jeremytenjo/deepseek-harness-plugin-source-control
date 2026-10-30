@@ -21,7 +21,7 @@ Review changes, generate commit messages, commit, push, and manage GitHub reposi
 - Click an image to open a full-screen viewer with wheel/pinch zoom, drag-to-pan, and a close button.
 - Right-click a line in the diff to open the file in VS Code at that line.
 - Push unpushed commits to the configured upstream.
-- Right-click the composer's source-control button to run **Generate + Push Commit** without opening the sidebar; the button shows a spinner and a toast reports the result.
+- Right-click the composer's source-control button to run **Generate + Push Commit** without opening the sidebar; the button shows a spinner and a toast reports the result with a preview of the generated message.
 - Discard all uncommitted changes from the Changes header, with a confirmation that covers staged, unstaged, and untracked files.
 - Open the connected GitHub repository, or create a private/public repository with `gh`.
 - Restart the app and Host from a dead-session error.
