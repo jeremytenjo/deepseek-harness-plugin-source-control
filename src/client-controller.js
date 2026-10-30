@@ -105,6 +105,8 @@ const h = React.createElement;
       triggerPushed: 'Committed {hash} and pushed.',
       triggerPushFailed: 'Committed {hash}, but the push failed: {error}',
       triggerEmptyMessage: 'The generated commit message was empty.',
+      triggerNoChangesShort: 'No changes',
+      triggerNotRepoShort: 'Not a repo',
       generate: 'Generate',
       generating: 'Generating…',
       refresh: 'Refresh changes',
@@ -225,6 +227,8 @@ const h = React.createElement;
       triggerPushed: '已提交 {hash} 并推送。',
       triggerPushFailed: '已提交 {hash}，但推送失败：{error}',
       triggerEmptyMessage: '生成的提交信息为空。',
+      triggerNoChangesShort: '无更改',
+      triggerNotRepoShort: '非仓库',
       generate: '生成',
       generating: '正在生成…',
       refresh: '刷新更改',
@@ -607,6 +611,7 @@ const h = React.createElement;
         return {
           summary: statusText(translate, status),
           canRun: Boolean(status.isRepo && status.changedFiles > 0),
+          isRepo: status.isRepo,
         };
       } catch {
         return null;

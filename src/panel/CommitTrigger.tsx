@@ -6,8 +6,6 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
-  ContextMenuLabel,
-  ContextMenuSeparator,
   ContextMenuTrigger,
 } from '../components/ui/context-menu';
 import { cn } from '../lib/utils';
@@ -22,6 +20,7 @@ export interface CommitTriggerResult {
 export interface CommitTriggerStatus {
   summary: string;
   canRun: boolean;
+  isRepo: boolean;
 }
 
 interface CommitTriggerProps {
@@ -98,7 +97,7 @@ export function CommitTrigger({
   const [busy, setBusy] = React.useState(false);
   const [toast, setToast] = React.useState<ToastState | null>(null);
   const [statusLoading, setStatusLoading] = React.useState(false);
-  const [menuStatus, setMenuStatus] = React.useState<CommitTriggerStatus | null>(null);
+  const [status, setStatus] = React.useState<CommitTriggerStatus | null>(null);
 
   React.useEffect(() => {
     mounted.current = true;
@@ -115,7 +114,7 @@ export function CommitTrigger({
     setStatusLoading(true);
     try {
       const next = await onLoadStatus();
-      if (mounted.current && seq === statusSeq.current) setMenuStatus(next);
+      if (mounted.current && seq === statusSeq.current) setStatus(next);
     } finally {
       if (mounted.current && seq === statusSeq.current) setStatusLoading(false);
     }
@@ -173,36 +172,10 @@ export function CommitTrigger({
             )}
           </button>
         </ContextMenuTrigger>
-        <ContextMenuContent className="dshcm-min-w-[220px]">
-          {statusLoading || menuStatus ? (
-            <>
-              <ContextMenuLabel className="dshcm-flex dshcm-items-center dshcm-gap-1.5 dshcm-font-normal">
-                {statusLoading ? (
-                  <>
-                    <Loader2 className="dshcm-size-3 dshcm-flex-none dshcm-animate-spin" />
-                    <span className="dshcm-truncate">{t('checking')}</span>
-                  </>
-                ) : (
-                  <>
-                    <span
-                      className={cn(
-                        'dshcm-size-1.5 dshcm-flex-none dshcm-rounded-full',
-                        menuStatus?.canRun
-                          ? 'dshcm-bg-[color:var(--dsw-alias-brand-primary)]'
-                          : 'dshcm-bg-border',
-                      )}
-                    />
-                    <span className="dshcm-min-w-0 dshcm-truncate" title={menuStatus?.summary}>
-                      {menuStatus?.summary}
-                    </span>
-                  </>
-                )}
-              </ContextMenuLabel>
-              <ContextMenuSeparator />
-            </>
-          ) : null}
+        <ContextMenuContent className="dshcm-min-w-[272px]">
           <ContextMenuItem
-            disabled={busy || Boolean(menuStatus && !menuStatus.canRun)}
+            disabled={busy || Boolean(status && !status.canRun)}
+            title={status?.summary}
             onSelect={() => {
               void runGeneratePush();
             }}
@@ -210,6 +183,17 @@ export function CommitTrigger({
           >
             <Sparkles className="dshcm-size-3.5 dshcm-flex-none dshcm-text-muted-foreground" />
             <span>{t('triggerGeneratePush')}</span>
+            <span className="dshcm-ml-auto dshcm-flex dshcm-flex-none dshcm-items-center dshcm-pl-2 dshcm-text-[10.5px] dshcm-text-muted-foreground">
+              {statusLoading ? (
+                <Loader2 className="dshcm-size-3 dshcm-animate-spin" />
+              ) : status?.canRun ? (
+                <span className="dshcm-max-w-[96px] dshcm-truncate">{status.summary}</span>
+              ) : status ? (
+                <span className="dshcm-max-w-[76px] dshcm-truncate">
+                  {status.isRepo ? t('triggerNoChangesShort') : t('triggerNotRepoShort')}
+                </span>
+              ) : null}
+            </span>
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
