@@ -6,6 +6,8 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
   ContextMenuTrigger,
 } from '../components/ui/context-menu';
 import { cn } from '../lib/utils';
@@ -17,10 +19,16 @@ export interface CommitTriggerResult {
   preview?: string;
 }
 
+export interface CommitTriggerStatus {
+  summary: string;
+  canRun: boolean;
+}
+
 interface CommitTriggerProps {
   t: Translate;
   onOpenPanel(): void;
   onGeneratePush(): Promise<CommitTriggerResult>;
+  onLoadStatus(): Promise<CommitTriggerStatus | null>;
 }
 
 interface ToastState {
@@ -77,12 +85,20 @@ function TriggerToast({
   );
 }
 
-export function CommitTrigger({ t, onOpenPanel, onGeneratePush }: CommitTriggerProps) {
+export function CommitTrigger({
+  t,
+  onOpenPanel,
+  onGeneratePush,
+  onLoadStatus,
+}: CommitTriggerProps) {
   const busyRef = React.useRef(false);
   const mounted = React.useRef(true);
   const toastSeq = React.useRef(0);
+  const statusSeq = React.useRef(0);
   const [busy, setBusy] = React.useState(false);
   const [toast, setToast] = React.useState<ToastState | null>(null);
+  const [statusLoading, setStatusLoading] = React.useState(false);
+  const [menuStatus, setMenuStatus] = React.useState<CommitTriggerStatus | null>(null);
 
   React.useEffect(() => {
     mounted.current = true;
@@ -92,6 +108,18 @@ export function CommitTrigger({ t, onOpenPanel, onGeneratePush }: CommitTriggerP
   }, []);
 
   const dismissToast = React.useCallback(() => setToast(null), []);
+
+  async function refreshMenuStatus() {
+    statusSeq.current += 1;
+    const seq = statusSeq.current;
+    setStatusLoading(true);
+    try {
+      const next = await onLoadStatus();
+      if (mounted.current && seq === statusSeq.current) setMenuStatus(next);
+    } finally {
+      if (mounted.current && seq === statusSeq.current) setStatusLoading(false);
+    }
+  }
 
   function presentToast(text: string, ok: boolean, preview?: string) {
     toastSeq.current += 1;
@@ -117,7 +145,11 @@ export function CommitTrigger({ t, onOpenPanel, onGeneratePush }: CommitTriggerP
 
   return (
     <>
-      <ContextMenu>
+      <ContextMenu
+        onOpenChange={(open) => {
+          if (open) void refreshMenuStatus();
+        }}
+      >
         <ContextMenuTrigger asChild>
           <button
             type="button"
@@ -141,9 +173,36 @@ export function CommitTrigger({ t, onOpenPanel, onGeneratePush }: CommitTriggerP
             )}
           </button>
         </ContextMenuTrigger>
-        <ContextMenuContent className="dshcm-min-w-[196px]">
+        <ContextMenuContent className="dshcm-min-w-[220px]">
+          {statusLoading || menuStatus ? (
+            <>
+              <ContextMenuLabel className="dshcm-flex dshcm-items-center dshcm-gap-1.5 dshcm-font-normal">
+                {statusLoading ? (
+                  <>
+                    <Loader2 className="dshcm-size-3 dshcm-flex-none dshcm-animate-spin" />
+                    <span className="dshcm-truncate">{t('checking')}</span>
+                  </>
+                ) : (
+                  <>
+                    <span
+                      className={cn(
+                        'dshcm-size-1.5 dshcm-flex-none dshcm-rounded-full',
+                        menuStatus?.canRun
+                          ? 'dshcm-bg-[color:var(--dsw-alias-brand-primary)]'
+                          : 'dshcm-bg-border',
+                      )}
+                    />
+                    <span className="dshcm-min-w-0 dshcm-truncate" title={menuStatus?.summary}>
+                      {menuStatus?.summary}
+                    </span>
+                  </>
+                )}
+              </ContextMenuLabel>
+              <ContextMenuSeparator />
+            </>
+          ) : null}
           <ContextMenuItem
-            disabled={busy}
+            disabled={busy || Boolean(menuStatus && !menuStatus.canRun)}
             onSelect={() => {
               void runGeneratePush();
             }}

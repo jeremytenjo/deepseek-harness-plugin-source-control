@@ -600,6 +600,19 @@ const h = React.createElement;
       }
     }
 
+    async function loadTriggerStatus(sessionKey, translate) {
+      try {
+        const data = await rpc(sessionKey, 'status', {}, translate);
+        const status = readStatus(data);
+        return {
+          summary: statusText(translate, status),
+          canRun: Boolean(status.isRepo && status.changedFiles > 0),
+        };
+      } catch {
+        return null;
+      }
+    }
+
     function TriggerSeat(props) {
       const translate = useTranslate(props.clientCtx);
       const sessionKey = normaliseSessionId(props.sessionId);
@@ -607,6 +620,7 @@ const h = React.createElement;
         t: translate,
         onOpenPanel: () => openPanel(props.clientCtx),
         onGeneratePush: () => generateAndPush(sessionKey, translate),
+        onLoadStatus: () => loadTriggerStatus(sessionKey, translate),
       });
     }
 
